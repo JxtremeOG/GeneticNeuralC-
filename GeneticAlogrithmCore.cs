@@ -205,6 +205,11 @@ public class GeneticAlgorithmCore{
                 if (earlyBreak) {
                     break;
                 }
+                if (genIndex == generationlimit - 1) {
+                    Console.WriteLine("Generation limit reached.");
+                    Console.WriteLine("Enter additional generations to run: ");
+                    generationlimit+= Convert.ToInt32(Console.ReadLine());
+                }
             }
             return population;
         }

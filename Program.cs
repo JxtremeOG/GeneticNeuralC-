@@ -83,7 +83,7 @@ class Program
         }
 
         GeneticAlgorithmCore geneticAlgorithmCore = new GeneticAlgorithmCore();
-        population = geneticAlgorithmCore.trainGenetically(population, xTrainMat, yTrainMat, 5000);
+        population = geneticAlgorithmCore.trainGenetically(population, xTrainMat, yTrainMat, 2000);
 
         foreach (NeuralNetwork network in population) {
             Console.WriteLine(network.fitnessScore);
