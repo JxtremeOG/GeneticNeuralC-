@@ -9,6 +9,7 @@ public class DenseLayer : IBaseLayer {
     public Matrix<double>? Output { get; set; }
 
     public static Random denseRandom = new Random();
+    private static readonly ThreadLocal<Random> ThreadRandom = new(() => new Random(Guid.NewGuid().GetHashCode()));
 
     public DenseLayer(int inputSize, int outputSize) {
         Normal normalDist = new Normal(0, 1);
@@ -52,39 +53,67 @@ public class DenseLayer : IBaseLayer {
         return (leftBias, rightBias);
     }
 
-    public void mutateWeights(double mutationRate, List<double> mutationRange) {
+    public void mutateWeights(double mutationRate, List<double> mutationRange, double mutationMultiplier) {
+        mutationRate = adjustMutationRate(mutationRate, mutationMultiplier);
         if (mutationRate < 0 || mutationRate > 1) {
             throw new ArgumentException("Invalid mutation rate");
         }
+
+        double minRange = mutationRange.Min();
+        double maxRange = mutationRange.Max();
+        double rangeSpan = maxRange - minRange;
+
+        int rowCount = weights.RowCount;
+        int columnCount = weights.ColumnCount;
         
-        for (int i = 0; i < weights.RowCount; i++)
+        // Parallelize the outer loop to utilize multiple cores
+        Parallel.For(0, rowCount, i =>
         {
-            for (int j = 0; j < weights.ColumnCount; j++)
+            var rand = ThreadRandom.Value;
+            for (int j = 0; j < columnCount; j++)
             {
-                if (denseRandom.NextDouble() < mutationRate)
+                if (rand!.NextDouble() < mutationRate)
                 {
-                    double rangeValue = mutationRange.Min() + (denseRandom.NextDouble() * (mutationRange.Max() - mutationRange.Min()));
+                    double rangeValue = minRange + (rand.NextDouble() * rangeSpan);
                     weights[i, j] += weights[i, j] * rangeValue;
                 }
             }
-        }
+        });
     }
 
-    public void mutateBias(double mutationRate, List<double> mutationRange) {
+    private double adjustMutationRate(double mutationRate, double mutationMultiplier) {
+        mutationRate *= mutationMultiplier;
+        mutationRate = Math.Abs(mutationRate);
+        if (mutationRate > 1) {
+            mutationRate = .9;
+        }
+        return mutationRate;
+    }
+
+    public void mutateBias(double mutationRate, List<double> mutationRange, double mutationMultiplier) {
+        mutationRate = adjustMutationRate(mutationRate, mutationMultiplier);
         if (mutationRate < 0 || mutationRate > 1) {
             throw new ArgumentException("Invalid mutation rate");
         }
-        
-        for (int i = 0; i < bias.RowCount; i++)
+
+        double minRange = mutationRange.Min();
+        double maxRange = mutationRange.Max();
+        double rangeSpan = maxRange - minRange;
+
+        int rowCount = bias.RowCount;
+        int columnCount = bias.ColumnCount;
+
+        Parallel.For(0, rowCount, i =>
         {
-            for (int j = 0; j < bias.ColumnCount; j++)
+            var rand = ThreadRandom.Value;
+            for (int j = 0; j < columnCount; j++)
             {
-                if (denseRandom.NextDouble() < mutationRate)
+                if (rand!.NextDouble() < mutationRate)
                 {
-                    double rangeValue = mutationRange.Min() + (denseRandom.NextDouble() * (mutationRange.Max() - mutationRange.Min()));
+                    double rangeValue = minRange + (rand.NextDouble() * rangeSpan);
                     bias[i, j] += bias[i, j] * rangeValue;
                 }
             }
-        }
+        });
     }
 }

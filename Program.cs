@@ -32,48 +32,12 @@ class Program
         Matrix<double> xTestMat = ConvertToMatrix(xTest);          // [20, 784]
         Matrix<double> yTestMat = ConvertToMatrix(yTest, 10);      // [20, 10]
 
-        // xTrainMat = Matrix<double>.Build.DenseOfArray(new double[,]
-        // {
-        //     { 0, 0 },  // First sample
-        //     { 0, 1 },  // Second sample
-        //     { 1, 0 },  // Third sample
-        //     { 1, 1 }   // Fourth sample
-        // });
-
-        // // yExpected: 4 samples, 1 output each
-        // yTrainMat = Matrix<double>.Build.DenseOfArray(new double[,]
-        // {
-        //     { 0 },  // First sample
-        //     { 1 },  // Second sample
-        //     { 1 },  // Third sample
-        //     { 0 }   // Fourth sample
-        // });
-
-        // xTestMat = Matrix<double>.Build.DenseOfArray(new double[,]
-        // {
-        //     { 0, 0 },  // First sample
-        //     { 0, 1 },  // Second sample
-        //     { 1, 0 },  // Third sample
-        //     { 1, 1 }   // Fourth sample
-        // });
-
-        // // yExpected: 4 samples, 1 output each
-        // yTestMat = Matrix<double>.Build.DenseOfArray(new double[,]
-        // {
-        //     { 0 },  // First sample
-        //     { 1 },  // Second sample
-        //     { 1 },  // Third sample
-        //     { 0 }   // Fourth sample
-        // });
-
         List<NeuralNetwork> population = new List<NeuralNetwork>();
 
-        for (int index = 0; index < 400; index++) {
+        for (int index = 0; index < 200; index++) {
             NeuralNetwork network = new NeuralNetwork(
                 new List<IBaseLayer>{
-                    new DenseLayer(28 * 28, 128),
-                    new ActivationTanh(),
-                    new DenseLayer(128, 40),
+                    new DenseLayer(28 * 28, 40),
                     new ActivationTanh(),
                     new DenseLayer(40, 10),
                     new ActivationTanh()
@@ -83,7 +47,7 @@ class Program
         }
 
         GeneticAlgorithmCore geneticAlgorithmCore = new GeneticAlgorithmCore();
-        population = geneticAlgorithmCore.trainGenetically(population, xTrainMat, yTrainMat, 2000);
+        population = geneticAlgorithmCore.trainGenetically(population, xTrainMat, yTrainMat, 500);
 
         foreach (NeuralNetwork network in population) {
             Console.WriteLine(network.fitnessScore);
@@ -95,6 +59,7 @@ class Program
                 Matrix<double> output = network.predictOutcome(inputSample);
                 Console.WriteLine($"Prediction: {getMax(output, false):0}, True: {getMax(trueLabel, false)}");
                 double error = geneticAlgorithmCore.MeanSquaredError(trueLabel, output);
+                Console.WriteLine($"Prediction Correct = {getMax(output, false) == getMax(trueLabel, false)}");
                 Console.WriteLine($"Error: {Math.Round(error, 3) * 100:0.0000}%");
                 Console.WriteLine(new string('-', 20));
             }
