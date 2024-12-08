@@ -47,8 +47,8 @@ public class GeneticAlgorithmCore{
 
 
     public List<IBaseLayer> createChildLayers(DenseLayer parent1Layer, DenseLayer parent2Layer, double fitnessAverage, double mutationMultiplier) {
-        double mutationRate = (10 - fitnessAverage) / 9;
-        List<double> mutationRange = new List<double> { (12 - fitnessAverage) / -9, (12 - fitnessAverage) / 9 };
+        double mutationRate = .6;
+        List<double> mutationRange = new List<double> { -1, 1 };
 
         DenseLayer child1Layer = new DenseLayer(parent1Layer.weights.ColumnCount, parent1Layer.weights.RowCount);
         DenseLayer child2Layer = new DenseLayer(parent2Layer.weights.ColumnCount, parent2Layer.weights.RowCount);
@@ -192,15 +192,13 @@ public class GeneticAlgorithmCore{
                 }
 
                 // Console.WriteLine($"{DateTime.Now} Networks set to 0 fitness score.");
-                while (count % 9 != 0) { //9 is an arbitrary number of examples to run for each generation
+                for (int i = 0; i < xTrain.RowCount/2; i++) { //9 is an arbitrary number of examples to run for each generation
                     Parallel.ForEach(population, network =>
                     {
-                        Matrix<double> output = network.predictOutcome(xTrain.SubMatrix(count % xTrain.RowCount, 1, 0, xTrain.ColumnCount));
-                        network.fitnessScore += ErrorBasedFitness(yTrain.SubMatrix(count % yTrain.RowCount, 1, 0, yTrain.ColumnCount), output);
+                        Matrix<double> output = network.predictOutcome(xTrain.SubMatrix(i % xTrain.RowCount, 1, 0, xTrain.ColumnCount));
+                        network.fitnessScore += ErrorBasedFitness(yTrain.SubMatrix(i % yTrain.RowCount, 1, 0, yTrain.ColumnCount), output);
                     });
-                    count++;
                 }
-                count++;
 
                 // Console.WriteLine($"{DateTime.Now}: Fitness calculated for all.");
 
@@ -213,9 +211,9 @@ public class GeneticAlgorithmCore{
                 Console.WriteLine($"Average fitness score: {populationAverage:0.0000}");
                 current100Avg = (populationAverage+current100Avg)/2;
 
-                if (population[0].fitnessScore > 8.997) {
-                    earlyBreak = true;
-                }
+                // if (population[0].fitnessScore > 8.997) {
+                //     earlyBreak = true;
+                // }
                 // Console.WriteLine($"{DateTime.Now}: Top 10% done.");
 
                 List<NeuralNetwork> newPopulation = new List<NeuralNetwork>();
@@ -279,6 +277,7 @@ public class GeneticAlgorithmCore{
                 // After parallel execution, combine offspring with population
                 newPopulation = offspringBag.ToList();
                 newPopulation.AddRange(population);
+                //populationBottomMutation(population, 0.5, new List<double> { -1, 1 }, mutationMultiplier, 20)
                 population = newPopulation;
                 // Console.WriteLine($"{DateTime.Now}: End population restart.");
                 if (earlyBreak) {

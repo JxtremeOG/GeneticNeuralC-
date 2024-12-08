@@ -34,7 +34,7 @@ class Program
 
         List<NeuralNetwork> population = new List<NeuralNetwork>();
 
-        for (int index = 0; index < 100; index++) {
+        for (int index = 0; index < 200; index++) {
             NeuralNetwork network = new NeuralNetwork(
                 new List<IBaseLayer>{
                     new DenseLayer(28 * 28, 40),
