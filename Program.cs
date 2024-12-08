@@ -32,40 +32,6 @@ class Program
         Matrix<double> xTestMat = ConvertToMatrix(xTest);          // [20, 784]
         Matrix<double> yTestMat = ConvertToMatrix(yTest, 10);      // [20, 10]
 
-        // xTrainMat = Matrix<double>.Build.DenseOfArray(new double[,]
-        // {
-        //     { 0, 0 },  // First sample
-        //     { 0, 1 },  // Second sample
-        //     { 1, 0 },  // Third sample
-        //     { 1, 1 }   // Fourth sample
-        // });
-
-        // // yExpected: 4 samples, 1 output each
-        // yTrainMat = Matrix<double>.Build.DenseOfArray(new double[,]
-        // {
-        //     { 0 },  // First sample
-        //     { 1 },  // Second sample
-        //     { 1 },  // Third sample
-        //     { 0 }   // Fourth sample
-        // });
-
-        // xTestMat = Matrix<double>.Build.DenseOfArray(new double[,]
-        // {
-        //     { 0, 0 },  // First sample
-        //     { 0, 1 },  // Second sample
-        //     { 1, 0 },  // Third sample
-        //     { 1, 1 }   // Fourth sample
-        // });
-
-        // // yExpected: 4 samples, 1 output each
-        // yTestMat = Matrix<double>.Build.DenseOfArray(new double[,]
-        // {
-        //     { 0 },  // First sample
-        //     { 1 },  // Second sample
-        //     { 1 },  // Third sample
-        //     { 0 }   // Fourth sample
-        // });
-
         List<NeuralNetwork> population = new List<NeuralNetwork>();
 
         for (int index = 0; index < 400; index++) {

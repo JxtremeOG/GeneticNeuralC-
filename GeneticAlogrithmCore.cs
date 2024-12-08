@@ -94,6 +94,7 @@ public class GeneticAlgorithmCore{
     public List<NeuralNetwork> trainGenetically(List<NeuralNetwork> population, 
         Matrix<double> xTrain, Matrix<double> yTrain, int generationlimit = 100) {
             bool earlyBreak = false;
+            int count = 1;
             for (int genIndex = 0; genIndex < generationlimit; genIndex++) {
                 // Console.WriteLine($"{DateTime.Now}: Generation {genIndex} Started.");
                 //Reset fitness scores
@@ -102,17 +103,7 @@ public class GeneticAlgorithmCore{
                 }
 
                 // Console.WriteLine($"{DateTime.Now} Networks set to 0 fitness score.");
-
-                int count = 0;
-                // while (count < 9) { //9 is an arbitrary number of examples to run for each generation
-                //     foreach (NeuralNetwork network in population) {
-                //         Matrix<double> output = network.predictOutcome(xTrain.SubMatrix(count % xTrain.RowCount, 1, 0, xTrain.ColumnCount));
-                //         network.fitnessScore += ErrorBasedFitness(yTrain.SubMatrix(count % yTrain.RowCount, 1, 0, yTrain.ColumnCount), output);
-                //     }
-                //     count++;
-                // }
-
-                while (count < 9) { //9 is an arbitrary number of examples to run for each generation
+                while (count % 9 != 0) { //9 is an arbitrary number of examples to run for each generation
                     Parallel.ForEach(population, network =>
                     {
                         Matrix<double> output = network.predictOutcome(xTrain.SubMatrix(count % xTrain.RowCount, 1, 0, xTrain.ColumnCount));
@@ -120,6 +111,7 @@ public class GeneticAlgorithmCore{
                     });
                     count++;
                 }
+                count++;
 
                 // Console.WriteLine($"{DateTime.Now}: Fitness calculated for all.");
 
