@@ -53,8 +53,8 @@ public class DenseLayer : IBaseLayer {
         return (leftBias, rightBias);
     }
 
-    public void mutateWeights(double mutationRate, List<double> mutationRange) {
-        mutationRate = adjustMutationRate(mutationRate);
+    public void mutateWeights(double mutationRate, List<double> mutationRange, double mutationMultiplier) {
+        mutationRate = adjustMutationRate(mutationRate, mutationMultiplier);
         if (mutationRate < 0 || mutationRate > 1) {
             throw new ArgumentException("Invalid mutation rate");
         }
@@ -81,7 +81,8 @@ public class DenseLayer : IBaseLayer {
         });
     }
 
-    private double adjustMutationRate(double mutationRate) {
+    private double adjustMutationRate(double mutationRate, double mutationMultiplier) {
+        mutationRate *= mutationMultiplier;
         mutationRate = Math.Abs(mutationRate);
         if (mutationRate > 1) {
             mutationRate = .9;
@@ -89,8 +90,8 @@ public class DenseLayer : IBaseLayer {
         return mutationRate;
     }
 
-    public void mutateBias(double mutationRate, List<double> mutationRange) {
-        mutationRate = adjustMutationRate(mutationRate);
+    public void mutateBias(double mutationRate, List<double> mutationRange, double mutationMultiplier) {
+        mutationRate = adjustMutationRate(mutationRate, mutationMultiplier);
         if (mutationRate < 0 || mutationRate > 1) {
             throw new ArgumentException("Invalid mutation rate");
         }

@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Net.NetworkInformation;
+using MathNet.Numerics;
 using MathNet.Numerics.LinearAlgebra;
 
 public class GeneticAlgorithmCore{
@@ -49,7 +50,7 @@ public class GeneticAlgorithmCore{
         return sum / totalElements;
     }
 
-    public List<IBaseLayer> createChildLayers(DenseLayer parent1Layer, DenseLayer parent2Layer, double fitnessAverage) {
+    public List<IBaseLayer> createChildLayers(DenseLayer parent1Layer, DenseLayer parent2Layer, double fitnessAverage, double mutationMultiplier) {
         double mutationRate = (10 - fitnessAverage) / 9;
         List<double> mutationRange = new List<double> { (12 - fitnessAverage) / -9, (12 - fitnessAverage) / 9 };
 
@@ -82,11 +83,11 @@ public class GeneticAlgorithmCore{
             child2Layer.bias = parent2Layer.bias.Clone();
         }
 
-        child1Layer.mutateWeights(mutationRate, mutationRange);
-        child2Layer.mutateWeights(mutationRate, mutationRange);
+        child1Layer.mutateWeights(mutationRate, mutationRange, mutationMultiplier);
+        child2Layer.mutateWeights(mutationRate, mutationRange, mutationMultiplier);
 
-        child1Layer.mutateBias(mutationRate, mutationRange);
-        child2Layer.mutateBias(mutationRate, mutationRange);
+        child1Layer.mutateBias(mutationRate, mutationRange, mutationMultiplier);
+        child2Layer.mutateBias(mutationRate, mutationRange, mutationMultiplier);
 
         return new List<IBaseLayer> { child1Layer, child2Layer };
     }
@@ -95,9 +96,25 @@ public class GeneticAlgorithmCore{
         Matrix<double> xTrain, Matrix<double> yTrain, int generationlimit = 100) {
             bool earlyBreak = false;
             int count = 1;
+            double mutationMultiplier = 1.0;
+            double last100Avg = 0.0;
+            double current100Avg = 0.0;
             for (int genIndex = 0; genIndex < generationlimit; genIndex++) {
                 // Console.WriteLine($"{DateTime.Now}: Generation {genIndex} Started.");
                 //Reset fitness scores
+                if (genIndex % 100 == 0) {
+                    Console.WriteLine($"Last 100 average: {last100Avg:0.0000}");
+                    Console.WriteLine($"Current 100 average: {current100Avg:0.0000}");
+                    if (last100Avg-current100Avg > -.1) {
+                        mutationMultiplier+=0.25;
+                        mutationMultiplier.Round(2);
+                    }
+                    else {
+                        mutationMultiplier = 1;
+                    }
+                    Console.WriteLine($"Mutation multiplier: {mutationMultiplier}");
+                    last100Avg = current100Avg;
+                }
                 foreach (NeuralNetwork network in population) {
                     network.fitnessScore = 0;
                 }
@@ -119,13 +136,38 @@ public class GeneticAlgorithmCore{
                 .OrderByDescending(network => network.fitnessScore)
                 .ToList();
 
+                int populationSize = population.Count;
+                int eliteCount = (int)Math.Ceiling(populationSize * 0.08); //Top 8% of the population
+                int diversityCount = (int)Math.Ceiling(populationSize * 0.02); //Bottom 2% of the population
+
                 // population = PerformWeightedSampling(population, population.Count / 10); // Randomly select 10% of the population weighted by fitness score
 
-                population = population.GetRange(0, population.Count / 10);
+                // population = population.GetRange(0, population.Count / 10);
+
+                 if (eliteCount + diversityCount > populationSize) {
+                    throw new InvalidOperationException("Elite and diversity count exceeds population size.");
+                 }
+
+                 // Select top 8% as elites
+                List<NeuralNetwork> elites = population
+                    .Take(eliteCount)
+                    .ToList();
+
+                // Select bottom 2% for diversity
+                List<NeuralNetwork> diversityIndividuals = population
+                    .Skip(populationSize - diversityCount)
+                    .Take(diversityCount)
+                    .ToList();
+
+                elites.AddRange(diversityIndividuals);
+                population = elites;
+
+                double populationAverage = population.Average(network => network.fitnessScore);
 
                 Console.WriteLine($"Generation {genIndex + 1} complete. ");
                 Console.WriteLine($"Top fitness score: {population[0].fitnessScore:0.0000}");
-                Console.WriteLine($"Average fitness score: {population.Average(network => network.fitnessScore):0.0000}");
+                Console.WriteLine($"Average fitness score: {populationAverage:0.0000}");
+                current100Avg = (populationAverage+current100Avg)/2;
 
                 if (population[0].fitnessScore > 8.997) {
                     earlyBreak = true;
@@ -167,7 +209,8 @@ public class GeneticAlgorithmCore{
                         List<IBaseLayer> childrenLayers = createChildLayers(
                             (DenseLayer)parent1.layers[layerIndex],
                             (DenseLayer)parent2.layers[layerIndex],
-                            averageFitness
+                            averageFitness,
+                            mutationMultiplier
                         );
 
                         IBaseLayer child1Layer = childrenLayers[0];
