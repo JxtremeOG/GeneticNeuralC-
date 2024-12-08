@@ -94,16 +94,26 @@ public class GeneticAlgorithmCore{
     public List<NeuralNetwork> trainGenetically(List<NeuralNetwork> population, 
         Matrix<double> xTrain, Matrix<double> yTrain, int generationlimit = 100) {
             bool earlyBreak = false;
-            int count = 1;
+            int count = 0;
+            int countIteration = 0;
+            double highFitness = 0;
             for (int genIndex = 0; genIndex < generationlimit; genIndex++) {
                 // Console.WriteLine($"{DateTime.Now}: Generation {genIndex} Started.");
+                count = 9 * countIteration;
+                if (count % 9 == 0) {
+                    count++;
+                }
+                if (highFitness > 8) {
+                    countIteration++;
+                }
+                Console.WriteLine($"Count {count}");
                 //Reset fitness scores
                 foreach (NeuralNetwork network in population) {
                     network.fitnessScore = 0;
                 }
 
                 // Console.WriteLine($"{DateTime.Now} Networks set to 0 fitness score.");
-                while (count % 9 != 0) { //9 is an arbitrary number of examples to run for each generation
+                while (count % 9 != 0 || count==0) { //9 is an arbitrary number of examples to run for each generation
                     Parallel.ForEach(population, network =>
                     {
                         Matrix<double> output = network.predictOutcome(xTrain.SubMatrix(count % xTrain.RowCount, 1, 0, xTrain.ColumnCount));
@@ -111,7 +121,6 @@ public class GeneticAlgorithmCore{
                     });
                     count++;
                 }
-                count++;
 
                 // Console.WriteLine($"{DateTime.Now}: Fitness calculated for all.");
 
@@ -122,9 +131,10 @@ public class GeneticAlgorithmCore{
                 // population = PerformWeightedSampling(population, population.Count / 10); // Randomly select 10% of the population weighted by fitness score
 
                 population = population.GetRange(0, population.Count / 10);
+                highFitness = population[0].fitnessScore;
 
                 Console.WriteLine($"Generation {genIndex + 1} complete. ");
-                Console.WriteLine($"Top fitness score: {population[0].fitnessScore:0.0000}");
+                Console.WriteLine($"Top fitness score: {highFitness:0.0000}");
                 Console.WriteLine($"Average fitness score: {population.Average(network => network.fitnessScore):0.0000}");
 
                 if (population[0].fitnessScore > 8.997) {

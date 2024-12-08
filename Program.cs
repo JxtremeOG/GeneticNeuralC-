@@ -37,9 +37,7 @@ class Program
         for (int index = 0; index < 400; index++) {
             NeuralNetwork network = new NeuralNetwork(
                 new List<IBaseLayer>{
-                    new DenseLayer(28 * 28, 128),
-                    new ActivationTanh(),
-                    new DenseLayer(128, 40),
+                    new DenseLayer(28 * 28, 40),
                     new ActivationTanh(),
                     new DenseLayer(40, 10),
                     new ActivationTanh()
