@@ -10,13 +10,8 @@ public class GeneticAlgorithmCore{
         if (yExpect.RowCount != yOutput.RowCount || yExpect.ColumnCount != yOutput.ColumnCount){
             throw new ArgumentException("yExpect and yOutput must have the same dimensions.");
         }
-
-        // var diff = yOutput - yExpect;
-        // diff.MapInplace(x => x*x*x*x); // Fourth power in-place
-        // double sum = diff.RowSums().Sum();
-        // return sum / (diff.RowCount * diff.ColumnCount);
         
-        Matrix<double> differenceEnhanced = (yExpect - yOutput).Map(x => Math.Pow(x, 4));
+        Matrix<double> differenceEnhanced = (yExpect - yOutput).Map(x => Math.Pow(x, 2));
 
         double sum = differenceEnhanced.Enumerate().Sum();
         double mse = sum / (differenceEnhanced.RowCount * differenceEnhanced.ColumnCount);
@@ -49,6 +44,7 @@ public class GeneticAlgorithmCore{
 
         return sum / totalElements;
     }
+
 
     public List<IBaseLayer> createChildLayers(DenseLayer parent1Layer, DenseLayer parent2Layer, double fitnessAverage, double mutationMultiplier) {
         double mutationRate = (10 - fitnessAverage) / 9;
@@ -92,6 +88,82 @@ public class GeneticAlgorithmCore{
         return new List<IBaseLayer> { child1Layer, child2Layer };
     }
 
+    private List<NeuralNetwork> eliteismSelection(List<NeuralNetwork> population, int percentElite = 10) {
+        population = population
+            .OrderByDescending(network => network.fitnessScore)
+            .ToList();
+        population = population.GetRange(0, population.Count / percentElite);
+        return population;
+    }
+
+    private List<NeuralNetwork> eliteismDiversitySelection(List<NeuralNetwork> population, int percentElite = 8, int percentDiversity = 2) {
+        // Sort the population in descending order based on fitness scores
+        population = population
+            .OrderByDescending(network => network.fitnessScore)
+            .ToList();
+
+        int populationSize = population.Count;
+        int eliteCount = (int)Math.Ceiling(populationSize * ((double)percentElite / 100)); // Top 8% of the population
+        int diversityCount = (int)Math.Ceiling(populationSize * ((double)percentDiversity / 100)); // Bottom 2% of the population
+
+        if (eliteCount + diversityCount > populationSize) {
+            throw new InvalidOperationException("Elite and diversity count exceeds population size.");
+        }
+
+        // Select top 8% as elites
+        List<NeuralNetwork> elites = population
+            .Take(eliteCount)
+            .ToList();
+
+        // Select bottom 2% for diversity
+        List<NeuralNetwork> diversityIndividuals = population
+            .Skip(populationSize - diversityCount)
+            .Take(diversityCount)
+            .ToList();
+
+        elites.AddRange(diversityIndividuals);
+        population = elites;
+        return population;
+    }
+
+    private List<NeuralNetwork> populationBottomMutation(List<NeuralNetwork> population, double mutationRate, List<double> mutationRange, 
+        double mutationMultiplier, int bottomMutationPercent) 
+    {
+        int populationSize = population.Count;
+        int keepCount = (int)Math.Ceiling(populationSize * ((double)(100 - bottomMutationPercent) / 100)); // Corrected calculation
+        int mutateCount = (int)Math.Ceiling(populationSize * ((double)(bottomMutationPercent) / 100)); // Corrected calculation
+
+        if (keepCount + mutateCount > populationSize) {
+            throw new InvalidOperationException("Elite and diversity count exceeds population size.");
+        }
+
+        // Select top (100 - bottomMutationPercent)% as kept individuals
+        List<NeuralNetwork> keepsIndividuals = population
+            .Take(keepCount)
+            .ToList();
+
+        // Select bottom bottomMutationPercent% for mutation
+        List<NeuralNetwork> diversityIndividuals = population
+            .Skip(populationSize - mutateCount)
+            .Take(mutateCount)
+            .ToList();
+            
+        // Mutate the selected diversity individuals
+        foreach (NeuralNetwork network in diversityIndividuals) {
+            foreach (IBaseLayer layer in network.layers) {
+                if (layer is DenseLayer denseLayer) {
+                    denseLayer.mutateWeights(mutationRate, mutationRange, mutationMultiplier);
+                    denseLayer.mutateBias(mutationRate, mutationRange, mutationMultiplier);
+                }
+            }
+        }
+
+        // Combine kept and mutated individuals to form the new population
+        keepsIndividuals.AddRange(diversityIndividuals);
+
+        return keepsIndividuals;
+    }
+
     public List<NeuralNetwork> trainGenetically(List<NeuralNetwork> population, 
         Matrix<double> xTrain, Matrix<double> yTrain, int generationlimit = 100) {
             bool earlyBreak = false;
@@ -132,35 +204,7 @@ public class GeneticAlgorithmCore{
 
                 // Console.WriteLine($"{DateTime.Now}: Fitness calculated for all.");
 
-                population = population
-                .OrderByDescending(network => network.fitnessScore)
-                .ToList();
-
-                int populationSize = population.Count;
-                int eliteCount = (int)Math.Ceiling(populationSize * 0.08); //Top 8% of the population
-                int diversityCount = (int)Math.Ceiling(populationSize * 0.02); //Bottom 2% of the population
-
-                // population = PerformWeightedSampling(population, population.Count / 10); // Randomly select 10% of the population weighted by fitness score
-
-                // population = population.GetRange(0, population.Count / 10);
-
-                 if (eliteCount + diversityCount > populationSize) {
-                    throw new InvalidOperationException("Elite and diversity count exceeds population size.");
-                 }
-
-                 // Select top 8% as elites
-                List<NeuralNetwork> elites = population
-                    .Take(eliteCount)
-                    .ToList();
-
-                // Select bottom 2% for diversity
-                List<NeuralNetwork> diversityIndividuals = population
-                    .Skip(populationSize - diversityCount)
-                    .Take(diversityCount)
-                    .ToList();
-
-                elites.AddRange(diversityIndividuals);
-                population = elites;
+                population = eliteismDiversitySelection(population, 8, 2);
 
                 double populationAverage = population.Average(network => network.fitnessScore);
 

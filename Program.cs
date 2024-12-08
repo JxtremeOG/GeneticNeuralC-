@@ -34,12 +34,10 @@ class Program
 
         List<NeuralNetwork> population = new List<NeuralNetwork>();
 
-        for (int index = 0; index < 400; index++) {
+        for (int index = 0; index < 100; index++) {
             NeuralNetwork network = new NeuralNetwork(
                 new List<IBaseLayer>{
-                    new DenseLayer(28 * 28, 128),
-                    new ActivationTanh(),
-                    new DenseLayer(128, 40),
+                    new DenseLayer(28 * 28, 40),
                     new ActivationTanh(),
                     new DenseLayer(40, 10),
                     new ActivationTanh()
@@ -49,7 +47,7 @@ class Program
         }
 
         GeneticAlgorithmCore geneticAlgorithmCore = new GeneticAlgorithmCore();
-        population = geneticAlgorithmCore.trainGenetically(population, xTrainMat, yTrainMat, 2000);
+        population = geneticAlgorithmCore.trainGenetically(population, xTrainMat, yTrainMat, 500);
 
         foreach (NeuralNetwork network in population) {
             Console.WriteLine(network.fitnessScore);
@@ -61,6 +59,7 @@ class Program
                 Matrix<double> output = network.predictOutcome(inputSample);
                 Console.WriteLine($"Prediction: {getMax(output, false):0}, True: {getMax(trueLabel, false)}");
                 double error = geneticAlgorithmCore.MeanSquaredError(trueLabel, output);
+                Console.WriteLine($"Prediction Correct = {getMax(output, false) == getMax(trueLabel, false)}");
                 Console.WriteLine($"Error: {Math.Round(error, 3) * 100:0.0000}%");
                 Console.WriteLine(new string('-', 20));
             }
