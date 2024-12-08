@@ -71,7 +71,7 @@ public class DenseLayer : IBaseLayer {
             var rand = ThreadRandom.Value;
             for (int j = 0; j < columnCount; j++)
             {
-                if (rand.NextDouble() < mutationRate)
+                if (rand!.NextDouble() < mutationRate)
                 {
                     double rangeValue = minRange + (rand.NextDouble() * rangeSpan);
                     weights[i, j] += weights[i, j] * rangeValue;
@@ -97,7 +97,7 @@ public class DenseLayer : IBaseLayer {
             var rand = ThreadRandom.Value;
             for (int j = 0; j < columnCount; j++)
             {
-                if (rand.NextDouble() < mutationRate)
+                if (rand!.NextDouble() < mutationRate)
                 {
                     double rangeValue = minRange + (rand.NextDouble() * rangeSpan);
                     bias[i, j] += bias[i, j] * rangeValue;

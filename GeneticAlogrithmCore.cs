@@ -159,7 +159,7 @@ public class GeneticAlgorithmCore{
                 {
                     // Each iteration produces 2 children
                     var rand = threadLocalRandom.Value;  // Safe to use now
-                    NeuralNetwork parent1 = population[rand.Next(population.Count)];
+                    NeuralNetwork parent1 = population[rand!.Next(population.Count)];
                     NeuralNetwork parent2 = population[rand.Next(population.Count)];
 
                     List<IBaseLayer> child1Layers = new List<IBaseLayer>();
