@@ -22,6 +22,16 @@ public class DenseLayer : IBaseLayer {
         return input * weights + bias;
     }
 
+    public IBaseLayer cloneLayer()
+    {
+        DenseLayer newLayer = new DenseLayer(weights.RowCount, weights.ColumnCount);
+        newLayer.weights = weights.Clone();
+        newLayer.mutateWeights(0.5, new List<double>{-1, 1}, 1);
+        newLayer.bias = bias.Clone();
+        newLayer.mutateBias(0.5, new List<double>{-1, 1}, 1);
+        return newLayer;
+    }
+
     public (Matrix<double> LeftWeights, Matrix<double> RightWeights) splitWeights(int splitPoint)
     {
         // Validate splitPoint for rows

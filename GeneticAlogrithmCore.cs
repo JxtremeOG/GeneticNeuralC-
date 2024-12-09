@@ -4,8 +4,15 @@ using MathNet.Numerics;
 using MathNet.Numerics.LinearAlgebra;
 
 public class GeneticAlgorithmCore{
-
+    public GeneticAlgorithmCore() {
+    }
     private static readonly Random randomStatic = new Random();
+    public double mutationMultiplier = 1.0;
+    public List<double> mutationRange = new List<double> { -1, 1 };
+
+    public double mutationRate = 0.6;
+    public double last100Avg = 0.0;
+    public double current100Avg = 0.0;
     public double ErrorBasedFitness(Matrix<double> yExpect, Matrix<double> yOutput) {
         if (yExpect.RowCount != yOutput.RowCount || yExpect.ColumnCount != yOutput.ColumnCount){
             throw new ArgumentException("yExpect and yOutput must have the same dimensions.");
@@ -45,10 +52,30 @@ public class GeneticAlgorithmCore{
         return sum / totalElements;
     }
 
-
+    public static double CalendarBasedFitness(Matrix<double> input, Matrix<double> output) {
+        double fitness = 0;
+        if (input.RowCount != output.RowCount || input.ColumnCount != output.ColumnCount) {
+            throw new ArgumentException("Input and output must have the same dimensions.");
+        }
+        for (int i = 0; i < input.RowCount; i++) {
+            for (int j = 0; j < input.ColumnCount; j++) {
+                switch (input[i, j]) {
+                    case 1:
+                        fitness += output[i, j] > 1 ? 0 : output[i, j];
+                        break;
+                    case 0:
+                        fitness += 1 - Math.Abs(output[i, j]);
+                        break;
+                    default:
+                        throw new ArgumentException("Invalid input value.");
+                }
+            }
+        }
+        return fitness;
+    }
     public List<IBaseLayer> createChildLayers(DenseLayer parent1Layer, DenseLayer parent2Layer, double fitnessAverage, double mutationMultiplier) {
-        double mutationRate = .6;
-        List<double> mutationRange = new List<double> { -1, 1 };
+
+        mutationRate = (96*400 - fitnessAverage) / 96*400; //500 is the size of the input dataset
 
         DenseLayer child1Layer = new DenseLayer(parent1Layer.weights.ColumnCount, parent1Layer.weights.RowCount);
         DenseLayer child2Layer = new DenseLayer(parent2Layer.weights.ColumnCount, parent2Layer.weights.RowCount);
@@ -164,45 +191,154 @@ public class GeneticAlgorithmCore{
         return keepsIndividuals;
     }
 
+    private void resetFitnessScores(List<NeuralNetwork> population) {
+        foreach (NeuralNetwork network in population) {
+            network.fitnessScore = 0;
+        }
+    }
+
+    private void calculatePopulationFitness(List<NeuralNetwork> population, Matrix<double> xTrain) {
+        for (int i = 0; i < xTrain.RowCount; i++) {
+            Parallel.ForEach(population, network =>
+            {
+                Matrix<double> output = network.predictOutcome(xTrain.SubMatrix(i % xTrain.RowCount, 1, 0, xTrain.ColumnCount));
+                network.fitnessScore += CalendarBasedFitness(xTrain.SubMatrix(i % xTrain.RowCount, 1, 0, xTrain.ColumnCount), output);
+            });
+            // foreach (var network in population)
+            // {
+            //     Matrix<double> inputSubMatrix = xTrain.SubMatrix(i % xTrain.RowCount, 1, 0, xTrain.ColumnCount);
+            //     Matrix<double> output = network.predictOutcome(inputSubMatrix);
+            //     double fitness = CalendarBasedFitness(inputSubMatrix, output);
+            //     network.fitnessScore += fitness;
+            // }
+        }
+    }
+
+    private void handleGenerationProgress(int genIndex) {
+        //Reset fitness scores
+        if (genIndex % 100 == 0) {
+            Console.WriteLine($"Last 100 average: {last100Avg:0.0000}");
+            Console.WriteLine($"Current 100 average: {current100Avg:0.0000}");
+            if (last100Avg-current100Avg > -.1) {
+                mutationMultiplier+=0.25;
+                mutationMultiplier.Round(2);
+            }
+            else {
+                mutationMultiplier = 1;
+            }
+            Console.WriteLine($"Mutation multiplier: {mutationMultiplier}");
+            last100Avg = current100Avg;
+        }
+    }
+    
+    private List<NeuralNetwork> repopulatePopulation(List<NeuralNetwork> population, int migrants = 5, int clones = 5) {
+        List<NeuralNetwork> newPopulation = new List<NeuralNetwork>();
+        // Suppose we have these outside the loop:
+        
+        int initialPopulationCount = population.Count;
+        int totalOffspringNeeded = initialPopulationCount * 9 - migrants - clones; // The desired multiplication factor
+        // Create a thread-local Random
+        ThreadLocal<Random> threadLocalRandom = new(() => new Random(Guid.NewGuid().GetHashCode()));
+
+        // We can use a concurrent data structure or thread-local lists
+        var offspringBag = new ConcurrentBag<NeuralNetwork>();
+
+        // Run in parallel:
+        Parallel.For(0, totalOffspringNeeded / 2, (i) =>
+        {
+            // Each iteration produces 2 children
+            var rand = threadLocalRandom.Value;  // Safe to use now
+            NeuralNetwork parent1 = population[rand!.Next(population.Count)];
+            NeuralNetwork parent2 = population[rand.Next(population.Count)];
+
+            List<IBaseLayer> child1Layers = new List<IBaseLayer>();
+            List<IBaseLayer> child2Layers = new List<IBaseLayer>();
+
+            double averageFitness = (parent1.fitnessScore + parent2.fitnessScore) / 2.0;
+
+            for (int layerIndex = 0; layerIndex < parent1.layers.Count; layerIndex++)
+            {
+                if (parent1.layers[layerIndex] is not DenseLayer)
+                    continue;
+
+                List<IBaseLayer> childrenLayers = createChildLayers(
+                    (DenseLayer)parent1.layers[layerIndex],
+                    (DenseLayer)parent2.layers[layerIndex],
+                    averageFitness,
+                    mutationMultiplier
+                );
+
+                IBaseLayer child1Layer = childrenLayers[0];
+                IBaseLayer child2Layer = childrenLayers[1];
+
+                child1Layers.Add(child1Layer);
+                child2Layers.Add(child2Layer);
+
+                // Add the activation after each dense layer
+                child1Layers.Add(new ActivationTanh());
+                child2Layers.Add(new ActivationTanh());
+            }
+
+            NeuralNetwork child1 = new NeuralNetwork(child1Layers);
+            NeuralNetwork child2 = new NeuralNetwork(child2Layers);
+
+            // Add children to the concurrent collection
+            offspringBag.Add(child1);
+            offspringBag.Add(child2);
+        });
+
+        // After parallel execution, combine offspring with population
+        newPopulation = offspringBag.ToList();
+        newPopulation.AddRange(createTravelers(migrants));
+        newPopulation.AddRange(createClones(clones, population[0]));
+        newPopulation.AddRange(populationBottomMutation(population, mutationRate, mutationRange, mutationMultiplier, 90));
+        return newPopulation;
+    }
+
+    public List<NeuralNetwork> createTravelers(int travelers) {
+        List<NeuralNetwork> travelerPopulation = new List<NeuralNetwork>();
+        for (int index = 0; index < travelers; index++) {
+            NeuralNetwork network = new NeuralNetwork(
+                new List<IBaseLayer>{
+                    new DenseLayer(96, 124),
+                    new ActivationTanh(),
+                    new DenseLayer(124, 96),
+                    new ActivationSigmoid(),
+                    new DenseLayer(96, 124),
+                    new ActivationTanh(),
+                    new DenseLayer(124, 96),
+                    new ActivationSigmoid()
+                }
+            );
+            travelerPopulation.Add(network);
+        }
+        return travelerPopulation;
+    }
+
+    public List<NeuralNetwork> createClones(int clones, NeuralNetwork topPerformer) {
+        List<NeuralNetwork> clonePopulation = new List<NeuralNetwork>();
+        for (int index = 0; index < clones; index++) {
+            List<IBaseLayer> cloneLayers = new List<IBaseLayer>();
+            foreach (IBaseLayer layer in topPerformer.layers) {
+                cloneLayers.Add(layer.cloneLayer());
+            }
+            NeuralNetwork clone = new NeuralNetwork(cloneLayers);
+            clonePopulation.Add(clone);
+        }
+        return clonePopulation;
+    }
     public List<NeuralNetwork> trainGenetically(List<NeuralNetwork> population, 
-        Matrix<double> xTrain, Matrix<double> yTrain, int generationlimit = 100) {
+        Matrix<double> xTrain, int generationlimit = 100) {
             bool earlyBreak = false;
-            int count = 1;
-            double mutationMultiplier = 1.0;
-            double last100Avg = 0.0;
-            double current100Avg = 0.0;
             for (int genIndex = 0; genIndex < generationlimit; genIndex++) {
-                // Console.WriteLine($"{DateTime.Now}: Generation {genIndex} Started.");
-                //Reset fitness scores
-                if (genIndex % 100 == 0) {
-                    Console.WriteLine($"Last 100 average: {last100Avg:0.0000}");
-                    Console.WriteLine($"Current 100 average: {current100Avg:0.0000}");
-                    if (last100Avg-current100Avg > -.1) {
-                        mutationMultiplier+=0.25;
-                        mutationMultiplier.Round(2);
-                    }
-                    else {
-                        mutationMultiplier = 1;
-                    }
-                    Console.WriteLine($"Mutation multiplier: {mutationMultiplier}");
-                    last100Avg = current100Avg;
-                }
-                foreach (NeuralNetwork network in population) {
-                    network.fitnessScore = 0;
-                }
+                Console.WriteLine($"Population Size: {population.Count}");
+                handleGenerationProgress(genIndex);
 
-                // Console.WriteLine($"{DateTime.Now} Networks set to 0 fitness score.");
-                for (int i = 0; i < xTrain.RowCount/2; i++) { //9 is an arbitrary number of examples to run for each generation
-                    Parallel.ForEach(population, network =>
-                    {
-                        Matrix<double> output = network.predictOutcome(xTrain.SubMatrix(i % xTrain.RowCount, 1, 0, xTrain.ColumnCount));
-                        network.fitnessScore += ErrorBasedFitness(yTrain.SubMatrix(i % yTrain.RowCount, 1, 0, yTrain.ColumnCount), output);
-                    });
-                }
+                resetFitnessScores(population);
 
-                // Console.WriteLine($"{DateTime.Now}: Fitness calculated for all.");
+                calculatePopulationFitness(population, xTrain);
 
-                population = eliteismDiversitySelection(population, 8, 2);
+                population = eliteismDiversitySelection(population, 4, 6); //Must add to 10
 
                 double populationAverage = population.Average(network => network.fitnessScore);
 
@@ -214,71 +350,8 @@ public class GeneticAlgorithmCore{
                 // if (population[0].fitnessScore > 8.997) {
                 //     earlyBreak = true;
                 // }
-                // Console.WriteLine($"{DateTime.Now}: Top 10% done.");
-
-                List<NeuralNetwork> newPopulation = new List<NeuralNetwork>();
-
-                // Console.WriteLine($"{DateTime.Now}: Start population children.");
-
-                // Suppose we have these outside the loop:
                 
-                int initialPopulationCount = population.Count;
-                int totalOffspringNeeded = initialPopulationCount * 9; // The desired multiplication factor
-                // Create a thread-local Random
-                ThreadLocal<Random> threadLocalRandom = new(() => new Random(Guid.NewGuid().GetHashCode()));
-
-                // We can use a concurrent data structure or thread-local lists
-                var offspringBag = new ConcurrentBag<NeuralNetwork>();
-
-                // Run in parallel:
-                Parallel.For(0, totalOffspringNeeded / 2, (i) =>
-                {
-                    // Each iteration produces 2 children
-                    var rand = threadLocalRandom.Value;  // Safe to use now
-                    NeuralNetwork parent1 = population[rand!.Next(population.Count)];
-                    NeuralNetwork parent2 = population[rand.Next(population.Count)];
-
-                    List<IBaseLayer> child1Layers = new List<IBaseLayer>();
-                    List<IBaseLayer> child2Layers = new List<IBaseLayer>();
-
-                    double averageFitness = (parent1.fitnessScore + parent2.fitnessScore) / 2.0;
-
-                    for (int layerIndex = 0; layerIndex < parent1.layers.Count; layerIndex++)
-                    {
-                        if (parent1.layers[layerIndex] is not DenseLayer)
-                            continue;
-
-                        List<IBaseLayer> childrenLayers = createChildLayers(
-                            (DenseLayer)parent1.layers[layerIndex],
-                            (DenseLayer)parent2.layers[layerIndex],
-                            averageFitness,
-                            mutationMultiplier
-                        );
-
-                        IBaseLayer child1Layer = childrenLayers[0];
-                        IBaseLayer child2Layer = childrenLayers[1];
-
-                        child1Layers.Add(child1Layer);
-                        child2Layers.Add(child2Layer);
-
-                        // Add the activation after each dense layer
-                        child1Layers.Add(new ActivationTanh());
-                        child2Layers.Add(new ActivationTanh());
-                    }
-
-                    NeuralNetwork child1 = new NeuralNetwork(child1Layers);
-                    NeuralNetwork child2 = new NeuralNetwork(child2Layers);
-
-                    // Add children to the concurrent collection
-                    offspringBag.Add(child1);
-                    offspringBag.Add(child2);
-                });
-
-                // After parallel execution, combine offspring with population
-                newPopulation = offspringBag.ToList();
-                newPopulation.AddRange(population);
-                //populationBottomMutation(population, 0.5, new List<double> { -1, 1 }, mutationMultiplier, 20)
-                population = newPopulation;
+                population = repopulatePopulation(population, migrants: 10, clones: 10);
                 // Console.WriteLine($"{DateTime.Now}: End population restart.");
                 if (earlyBreak) {
                     break;
@@ -286,49 +359,13 @@ public class GeneticAlgorithmCore{
                 if (genIndex == generationlimit - 1) {
                     Console.WriteLine("Generation limit reached.");
                     Console.WriteLine("Enter additional generations to run: ");
-                    generationlimit+= Convert.ToInt32(Console.ReadLine());
+                    string inputedValue = Console.ReadLine();
+                    generationlimit+= Convert.ToInt32(inputedValue == String.Empty ? "0" : inputedValue);
                 }
             }
+            population = population
+                .OrderByDescending(network => network.fitnessScore)
+                .ToList();
             return population;
         }
-
-    public List<NeuralNetwork> PerformWeightedSampling(List<NeuralNetwork> population, int sampleCount)
-    {
-        // Calculate the total fitness score
-        double totalFitness = population.Sum(network => network.fitnessScore);
-
-        if (totalFitness == 0)
-        {
-            throw new InvalidOperationException("Total fitness is zero. Cannot perform weighted sampling.");
-        }
-
-        // Normalize fitness scores to get probabilities
-        double[] probabilities = population
-            .Select(network => network.fitnessScore / totalFitness)
-            .ToArray();
-
-        // Build the cumulative distribution function (CDF)
-        double[] cdf = new double[probabilities.Length];
-        cdf[0] = probabilities[0];
-        for (int i = 1; i < probabilities.Length; i++)
-        {
-            cdf[i] = cdf[i - 1] + probabilities[i];
-        }
-
-        // Perform weighted random sampling
-        List<NeuralNetwork> selected = new List<NeuralNetwork>();
-        for (int i = 0; i < sampleCount; i++)
-        {
-            double rand = randomStatic.NextDouble(); // Random number between 0 and 1
-            int index = Array.BinarySearch(cdf, rand);
-            if (index < 0)
-            {
-                index = ~index; // Find the first element larger than rand
-            }
-
-            selected.Add(population[index]);
-        }
-
-        return selected;
-    }
 }
