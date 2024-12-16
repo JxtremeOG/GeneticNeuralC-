@@ -12,7 +12,7 @@ class Program
 
         List<NeuralNetwork> population = new List<NeuralNetwork>();
 
-        for (int index = 0; index < 400; index++) {
+        for (int index = 0; index < 300; index++) {
             NeuralNetwork network = new NeuralNetwork(
                 new List<IBaseLayer>{
                     new DenseLayer(scheduleCreator.segments, 124),
@@ -29,7 +29,7 @@ class Program
         }
 
         GeneticAlgorithmCore geneticAlgorithmCore = new GeneticAlgorithmCore();
-        population = geneticAlgorithmCore.trainGenetically(population, xTrainMat, 5000);
+        population = geneticAlgorithmCore.trainGenetically(population, xTrainMat, 2500);
 
         foreach (NeuralNetwork network in population) {
             Console.WriteLine(network.fitnessScore);
