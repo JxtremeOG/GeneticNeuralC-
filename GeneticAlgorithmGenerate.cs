@@ -2,13 +2,13 @@ using System.Collections;
 using System.Formats.Asn1;
 using Tensorflow;
 
-public class ShceduleBitMap {
+public class ScheduleBitMap {
     public static Random random = new Random();
     private BitArray schedule;
     private BitArray scheduleBase;
-    public int fitness;
+    public double fitness;
     public HashSet<int> taskIndexs = new HashSet<int>();
-    public ShceduleBitMap(BitArray schedulePassed) {
+    public ScheduleBitMap(BitArray schedulePassed) {
         schedule = schedulePassed;
         scheduleBase = schedulePassed;
         fitness = 0;
@@ -29,8 +29,16 @@ public class ShceduleBitMap {
         return schedule;
     }
 
+    public BitArray getBaseSchedule() {
+        return scheduleBase;
+    }
+
     public bool getBitValue(int bitIndex) {
         return schedule[bitIndex];
+    }
+
+    public bool getBaseBitValue(int bitIndex) {
+        return scheduleBase[bitIndex];
     }
 
     public bool mutateBit(int bitIndex) {
@@ -51,23 +59,28 @@ public class ShceduleBitMap {
 public class GeneticAlgorithmGenerate {
     public int populationSize;
     public int taskSize;
+    public static Random random = new Random();
     public int scheduleSize;
     public int mutationChance;
 
-    public int immigrantCount = 5;
+    public int immigrantCount;
     public int generationCount;
     public BitArray scheduleBase;
-    public List<ShceduleBitMap> population = new List<ShceduleBitMap>();
+    public FitnessCore fitnessCore = new FitnessCore();
+    public List<ScheduleBitMap> population = new List<ScheduleBitMap>();
     public Random geneticRandom = new Random();
-    public GeneticAlgorithmGenerate(int scheduleSizePassed, int taskSizePassed, int populationSizePassed, int mutationChancePassed, int generationSizePassed) {
+    public GeneticAlgorithmGenerate(int scheduleSizePassed, int taskSizePassed, 
+    int populationSizePassed, int mutationChancePassed, int generationSizePassed, 
+    int immigrantCountPassed) {
         populationSize = populationSizePassed;
         taskSize = taskSizePassed;
         scheduleSize = scheduleSizePassed;
         mutationChance = mutationChancePassed;
         generationCount = generationSizePassed;
-        scheduleBase = GenerateSchedule();
+        immigrantCount = immigrantCountPassed;
+        scheduleBase = GenerateOrganizedSchedule();
     }
-    public BitArray GenerateSchedule() {
+    public BitArray GenerateRandomSchedule() {
         BitArray schedule = new BitArray(scheduleSize);
         for (int i = 0; i < scheduleSize; i++) {
             schedule[i] = geneticRandom.Next(0, 2) == 1;
@@ -75,119 +88,126 @@ public class GeneticAlgorithmGenerate {
         scheduleBase = schedule;
         return schedule;
     }
-    public ShceduleBitMap TournamentSelection(int tournamentSize) {
+    public BitArray GenerateOrganizedSchedule() {
+        BitArray schedule = new BitArray(scheduleSize);
+        int index = 0;
+        while (index < scheduleSize) {
+            if (index % 96 == 0) { // Generate sleep time
+                for (int i = 0; i < 32; i++) {
+                    schedule[index + i] = true;
+                }
+                index+=32;
+            }
+            else if (index % 96 == 76) { // Generate dinner time
+                int dinnerLength = random.Next(3,6);
+                for (int i = 0; i < dinnerLength; i++) {
+                    schedule[index + i] = true;
+                }
+                index+=dinnerLength;
+            }
+            else
+                index+=1;
+        }
+
+        for (int i = 0; i < scheduleSize; i++) {
+            if (!schedule[i])
+                schedule[i] = geneticRandom.Next(0, 2) == 1;
+        }
+        scheduleBase = schedule;
+        return schedule;
+    }
+    public ScheduleBitMap TournamentSelection(int tournamentSize) {
         int actualTournamentSize = Math.Min(tournamentSize, population.Count);
-        List<ShceduleBitMap> tournament = new List<ShceduleBitMap>();
+        List<ScheduleBitMap> tournament = new List<ScheduleBitMap>();
         // Randomly pick individuals to enter the tournament.
         for (int i = 0; i < actualTournamentSize; i++) {
             int randomIndex = geneticRandom.Next(0, population.Count);
             tournament.Add(population[randomIndex]);
         }
         // Sort them by fitness (descending)
-        ShceduleBitMap winner = tournament.OrderByDescending(ind => ind.fitness).First();
+        ScheduleBitMap winner = tournament.OrderByDescending(ind => ind.fitness).First();
         return winner;
     }
-    public ShceduleBitMap TrainGenetically() {
+    public ScheduleBitMap TrainGenetically() {
         for (int i = 0; i < populationSize; i++) {
-            ShceduleBitMap schedule = new ShceduleBitMap(new BitArray(scheduleBase));
+            ScheduleBitMap schedule = new ScheduleBitMap(new BitArray(scheduleBase));
             schedule.addTask(taskSize);
             population.Add(schedule);
         }
         for (int i = 0; i < generationCount; i++) {
-            foreach (ShceduleBitMap schedule in population) {
+            // Console.WriteLine($"Generation: {i} and population size: {population.Count}");
+            foreach (ScheduleBitMap schedule in population) {
                 schedule.fitness = 0;
-                FitnessFunction(schedule);
+                fitnessCore.FitnessFunction(schedule);
             }
-            int remianingPopulation = (int)(populationSize * .3); //.1 = 10% of the population
-            population = population.OrderByDescending(x => x.fitness).Take(remianingPopulation).ToList();
-            List<ShceduleBitMap> newPopulation = new List<ShceduleBitMap>();
+            int remianingPopulation = (int)(populationSize * .5); //.1 = 10% of the population
+            List<ScheduleBitMap> newPopulation = new List<ScheduleBitMap>();
+            newPopulation = population.OrderByDescending(x => x.fitness).Take(remianingPopulation).ToList();
 
             if (i % 10 == 0)
-                Console.WriteLine($"Generation: {i} Top performer fitness: {population[0].fitness}");
+                Console.WriteLine($"Generation: {i} Top performer fitness: {newPopulation[0].fitness}");
 
-            newPopulation.AddRange(population);
+            newPopulation.AddRange(population
+                .OrderBy(x => x.fitness)
+                .Skip(immigrantCount)
+                .Take(immigrantCount * 3)
+                .ToList());
+            for (int j = 0; j < immigrantCount; j++) {
+                ScheduleBitMap addedSchedule = new ScheduleBitMap(new BitArray(scheduleBase));
+                addedSchedule.addTask(taskSize);
+                newPopulation.Add(addedSchedule);
+            }
             
-            while (newPopulation.Count < populationSize - immigrantCount) {
-                ShceduleBitMap parent1 = TournamentSelection(5); // sample size = 5, adjust as needed
-                ShceduleBitMap parent2 = TournamentSelection(5);
+            while (newPopulation.Count < populationSize) {
+                ScheduleBitMap parent1 = TournamentSelection(5); // sample size = 5, adjust as needed
+                ScheduleBitMap parent2 = TournamentSelection(5);
 
-                Tuple<ShceduleBitMap, ShceduleBitMap> children = CrossOver(parent1, parent2);
-                ShceduleBitMap child1 = Mutate(children.Item1);
-                ShceduleBitMap child2 = Mutate(children.Item2);
+                Tuple<ScheduleBitMap, ScheduleBitMap> children = CrossOver(parent1, parent2);
+                ScheduleBitMap child1 = Mutate(children.Item1);
+                ScheduleBitMap child2 = Mutate(children.Item2);
 
                 newPopulation.Add(child1);
                 if (newPopulation.Count < populationSize) {
                     newPopulation.Add(child2);
                 }
             }
-            for (int j = 0; j < immigrantCount; j++) {
-                ShceduleBitMap addedSchedule = new ShceduleBitMap(new BitArray(scheduleBase));
-                addedSchedule.addTask(taskSize);
-                newPopulation.Add(addedSchedule);
-            }
             population = newPopulation;
         }
         return population[0];
     }
-    public double FitnessFunction(ShceduleBitMap schedule) {
-        List<int> values = new List<int>{0,1,2,3,4,5,6,7,8,9,10,11};
 
-        for (int i = 0; i < scheduleSize; i++) {
-            if (schedule.getBitValue(i) && values.Contains(i)) {
-                schedule.fitness++;
-            }
+    public Tuple<ScheduleBitMap, ScheduleBitMap> CrossOver(ScheduleBitMap schedule1, ScheduleBitMap schedule2) {
+        ScheduleBitMap childSchedule1 = new ScheduleBitMap(new BitArray(scheduleBase));
+        ScheduleBitMap childSchedule2 = new ScheduleBitMap(new BitArray(scheduleBase));
+        List<int> child1TaskIndex = new List<int>();
+        List<int> child2TaskIndex = new List<int>();
+        List<int> combinedParentTasks = new List<int>();
+        combinedParentTasks.AddRange(schedule1.taskIndexs);
+        combinedParentTasks.AddRange(schedule2.taskIndexs);
+
+        int halfCount = (int)(combinedParentTasks.Count / 2);
+        while (child1TaskIndex.Count != child1TaskIndex.Distinct().ToList().Count || child1TaskIndex.Count == 0) {
+            child1TaskIndex = combinedParentTasks
+                .OrderBy(_ => Guid.NewGuid())
+                .Take(halfCount)              
+                .ToList();
         }
-        return schedule.fitness;
+        while (child2TaskIndex.Count != child2TaskIndex.Distinct().ToList().Count || child2TaskIndex.Count == 0) {
+            child2TaskIndex = combinedParentTasks
+                .OrderBy(_ => Guid.NewGuid())
+                .Take(halfCount)              
+                .ToList();
+        }
+        for (int i = 0; i < taskSize; i++) {
+            childSchedule1.mutateBit(child1TaskIndex[i]);
+            childSchedule2.mutateBit(child2TaskIndex[i]);
+        }
+
+        // Console.WriteLine($"Child 1: {childSchedule1.taskIndexs.Count} Child 2: {childSchedule2.taskIndexs.Count}");
+        return new Tuple<ScheduleBitMap, ScheduleBitMap>(childSchedule1, childSchedule2);
     }
 
-    public Tuple<ShceduleBitMap, ShceduleBitMap> CrossOver(ShceduleBitMap schedule1, ShceduleBitMap schedule2) {
-        ShceduleBitMap childSchedule1 = new ShceduleBitMap(new BitArray(scheduleBase));
-        ShceduleBitMap childSchedule2 = new ShceduleBitMap(new BitArray(scheduleBase));
-        int child1FlipCount = 0;
-        int child2FlipCount = 0;
-        
-        for (int i = 0; i < scheduleSize; i++) {
-            if (schedule1.getBitValue(i) != scheduleBase[i]) {
-                if (child1FlipCount >= taskSize) {
-                    childSchedule2.mutateBit(i);
-                }
-                else if (child2FlipCount >= taskSize) {
-                    childSchedule1.mutateBit(i);
-                }
-                else {
-                    if (geneticRandom.Next(0, 2) == 1) {
-                        childSchedule1.mutateBit(i);
-                        child1FlipCount++;
-                    }
-                    else {
-                        childSchedule2.mutateBit(i);
-                        child2FlipCount++;
-                    }
-                }
-            }
-            else if (schedule2.getBitValue(i) != scheduleBase[i]) {
-                if (child1FlipCount >= taskSize) {
-                    childSchedule2.mutateBit(i);
-                }
-                else if (child2FlipCount >= taskSize) {
-                    childSchedule1.mutateBit(i);
-                }
-                else {
-                    if (geneticRandom.Next(0, 2) == 1) {
-                        childSchedule1.mutateBit(i);
-                        child1FlipCount++;
-                    }
-                    else {
-                        childSchedule2.mutateBit(i);
-                         child2FlipCount++;
-                    }
-                }
-            }
-        }
-        return new Tuple<ShceduleBitMap, ShceduleBitMap>(childSchedule1, childSchedule2);
-    }
-
-    public ShceduleBitMap Mutate(ShceduleBitMap schedule) {
+    public ScheduleBitMap Mutate(ScheduleBitMap schedule) {
         var taskIndicesCopy = schedule.taskIndexs.ToList();
         foreach (int i in taskIndicesCopy) {
             if (geneticRandom.Next(0, 100) < mutationChance) {

@@ -51,18 +51,46 @@ class Program
 
     static void Main() {
         Random random = new Random();
-        int mutationChance = 20; //% chance out of 100
-        int scheduleSize = 96; //96 segments in a day. 1344 in 2 weeks
+        int mutationChance = 40; //% chance out of 100
+        int scheduleSize = 96*7; //96 segments in a day. 1344 in 2 weeks
         int dataSetSize = 1;
-        int populationSize = 100;
-        int generationLimit = 100;
+        int populationSize = 500;
+        int generationLimit = 200;
+        int immigrantCountPercent = 2;
+
+        if (populationSize * immigrantCountPercent / 100 % 1 != 0) {
+            throw new Exception("Population size must be divisible by immigrant count percent");
+        }
 
         for (int i = 0; i < dataSetSize; i++) {
             int taskSize = random.Next(1,13);
-            GeneticAlgorithmGenerate geneticAlgorithm = new GeneticAlgorithmGenerate(scheduleSize, taskSize, populationSize, mutationChance, generationLimit);
-            geneticAlgorithm.GenerateSchedule();
-            ShceduleBitMap topPerformer = geneticAlgorithm.TrainGenetically();
+            GeneticAlgorithmGenerate geneticAlgorithm = new GeneticAlgorithmGenerate(
+                scheduleSize, taskSize, populationSize, mutationChance, generationLimit, immigrantCountPercent/100 * populationSize);
+            ScheduleBitMap topPerformer = geneticAlgorithm.TrainGenetically();
+            printSchedule(topPerformer);
             Console.WriteLine($"Top performer fitness: {topPerformer.fitness} with task size: {taskSize}");
+        }
+    }
+
+    public static void printSchedule(ScheduleBitMap schedule) {
+        for (int i = 0; i < schedule.getSchedule().Length; i++) {
+            if ((i) % 96 == 0) {
+                Console.WriteLine($"Day: {(int)(i/96)}");
+            }
+            if (schedule.getBitValue(i)) {
+                if (schedule.taskIndexs.Contains(i)) {
+                    Console.Write("2");
+                }
+                else {
+                    Console.Write("1");
+                }
+            }
+            else {
+                Console.Write("0");
+            }
+            if ((i+1) % 24 == 0) {
+                Console.WriteLine();
+            }
         }
     }
 }
