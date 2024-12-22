@@ -51,11 +51,11 @@ class Program
 
     static void Main() {
         Random random = new Random();
-        int mutationChance = 40; //% chance out of 100
+        int mutationChance = 50; //% chance out of 100
         int scheduleSize = 96*7; //96 segments in a day. 1344 in 2 weeks
         int dataSetSize = 1;
-        int populationSize = 500;
-        int generationLimit = 200;
+        int populationSize = 10000;
+        int generationLimit = 500;
         int immigrantCountPercent = 2;
 
         if (populationSize * immigrantCountPercent / 100 % 1 != 0) {
@@ -78,7 +78,7 @@ class Program
                 Console.WriteLine($"Day: {(int)(i/96)}");
             }
             if (schedule.getBitValue(i)) {
-                if (schedule.taskIndexs.Contains(i)) {
+                if (schedule.taskIndexes.Contains(i)) {
                     Console.Write("2");
                 }
                 else {

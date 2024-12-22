@@ -5,10 +5,11 @@ using MathNet.Numerics.LinearAlgebra;
 public class FitnessCore {
     public FitnessCore() {
     }
+    public HashSet<double> clumpScores = new HashSet<double>();
     public double clumpingMultiplyer = 30;
     public double taskSplitMultiplier = 3000;
     public double daySplitMultiplier = 5000;
-    public double minTaskScorePenalty = 1000;
+    public double taskClumpScoreMultiplier = 500;
     public int minTaskSize = 2;
     public List<List<double>> TODMultiplyers = new List<List<double>> { //These numbers have to be extreme i.e ~50 change by 20
         new List<double> { 50, 50, 50, 50 }, //0
@@ -19,6 +20,12 @@ public class FitnessCore {
         new List<double> { 50, 50, 50, 50 }, //5
         new List<double> { 50, 50, 50, 50 }, //6
     };
+
+    public void PreCalculateClumpScores(int scheduleLength) {
+        for (int i = 0; i < scheduleLength; i++) {
+            clumpScores.Add(CalculateClumpScore(i, clumpingMultiplyer));
+        }
+    }
 
     /*
     Clump Score
@@ -40,22 +47,23 @@ public class FitnessCore {
                 if (clumpSize > 24)
                     clumpSize = 0;
                 else
-                    clumpSize-=2;
+                    clumpSize = clumpSize > 2 ? clumpSize-2 : 0;
             }
-            clumpScore += CalculateClumpScore(clumpSize);
+            // clumpScore += CalculateClumpScore(clumpSize);
+            clumpScore += clumpScores.ElementAt(clumpSize);
         }
         return clumpScore;
     }
-    public double CalculateClumpScore(int x) {
+    public double CalculateClumpScore(int x, double multiplier) {
         double y = 0;
 
         if (x <= 12)
         {
-            y = 1 / (1.0 + Math.Pow((x-12) / 12.0, 2)) * clumpingMultiplyer;
+            y = 1 / (1.0 + Math.Pow((x-12) / 12.0, 2)) * multiplier;
         }
         else
         {
-            y = 1 / (1.0 + Math.Pow((x-12) / 8.0, 2))  * clumpingMultiplyer;
+            y = 1 / (1.0 + Math.Pow((x-12) / 8.0, 2))  * multiplier;
         }
         return y;
     }
@@ -76,9 +84,9 @@ public class FitnessCore {
         return (int)(i / 24);
     }
     public double RunSplitTaskScore(ScheduleBitMap schedule) {
-        List<int> sortedTaskIndexs = schedule.taskIndexs.ToList();
-        sortedTaskIndexs.Sort();
-        int splitDifference = sortedTaskIndexs[sortedTaskIndexs.Count-1] - sortedTaskIndexs[0] + 1; //+1 to account for 0 index
+        List<int> sortedTaskIndexes = schedule.taskIndexes.ToList();
+        sortedTaskIndexes.Sort();
+        int splitDifference = sortedTaskIndexes[sortedTaskIndexes.Count-1] - sortedTaskIndexes[0] + 1; //+1 to account for 0 index
         return CalculateSplitScore(splitDifference, taskSplitMultiplier);
     }
     public double CalculateSplitScore(int x, double multiplier) {
@@ -86,7 +94,7 @@ public class FitnessCore {
     }
     public double RunDaySpread(ScheduleBitMap schedule) {
         int dayCount = 1;
-        List<int> sortedTaskIndexs = schedule.taskIndexs.ToList();
+        List<int> sortedTaskIndexs = schedule.taskIndexes.ToList();
         sortedTaskIndexs.Sort();
         for (int i = 0; i < sortedTaskIndexs.Count-1; i++) {
             if ((int)(calculateCurrentTOD(sortedTaskIndexs[i]) / 4) != (int)(calculateCurrentTOD(sortedTaskIndexs[i+1]) / 4)) {
@@ -95,28 +103,28 @@ public class FitnessCore {
         }
         return CalculateSplitScore(dayCount, daySplitMultiplier);
     }
-    public double RunMinimumTaskSize(ScheduleBitMap schedule) {
+    public double RunTaskClump(ScheduleBitMap schedule) {
         int currentTaskSize = 1;
-        double minTaskScore = 0;
-        List<int> sortedTaskIndexs = schedule.taskIndexs.ToList();
-        sortedTaskIndexs.Sort();
-        for (int i = 0; i < sortedTaskIndexs.Count()-1; i++) {
-            if (sortedTaskIndexs[i] + 1 != sortedTaskIndexs[i+1]) {
-                minTaskScore -= currentTaskSize < minTaskSize ? minTaskScorePenalty : 0;
+        double taskClumpScore = 0;
+        List<int> sortedTaskIndexes = schedule.taskIndexes.ToList();
+        sortedTaskIndexes.Sort();
+        for (int i = 0; i < sortedTaskIndexes.Count()-1; i++) {
+            if (sortedTaskIndexes[i] + 1 != sortedTaskIndexes[i+1]) {
                 currentTaskSize = 1;
             }
             else {
                 currentTaskSize++;
             }
+            taskClumpScore += CalculateClumpScore(currentTaskSize, taskClumpScoreMultiplier);
         }
-        return minTaskScore;
+        return taskClumpScore;
     }
     public double FitnessFunction(ScheduleBitMap schedule) {
         // schedule.fitness += RunClumpScore(schedule);
         // schedule.fitness += RunTODScore(schedule);
         schedule.fitness += RunSplitTaskScore(schedule);
         // schedule.fitness += RunDaySpread(schedule);
-        schedule.fitness += RunMinimumTaskSize(schedule);
+        schedule.fitness += RunTaskClump(schedule);
         return schedule.fitness;
     }
 }
