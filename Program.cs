@@ -51,10 +51,10 @@ class Program
 
     static void Main() {
         Random random = new Random();
-        int mutationChance = 50; //% chance out of 100
+        int mutationChance = 60; //% chance out of 100
         int scheduleSize = 96*7; //96 segments in a day. 1344 in 2 weeks
         int dataSetSize = 1;
-        int populationSize = 10000;
+        int populationSize = 15000;
         int generationLimit = 500;
         int immigrantCountPercent = 2;
 
