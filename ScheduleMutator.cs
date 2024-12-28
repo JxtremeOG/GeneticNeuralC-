@@ -11,7 +11,7 @@ public class ScheduleMutator {
     public ScheduleBitMap MutateSingleBit(ScheduleBitMap schedule, int mutateIndex) {
         int iterationCount = 0;
         while (true && iterationCount < safeGuard) {
-            int randomIndex = geneticRandom.Next(0, schedule.getSchedule().Length);
+            int randomIndex = geneticRandom.Next(0, schedule.scheduleSize);
             if (!schedule.getBitValue(randomIndex)) {
                 schedule.mutateBit(randomIndex);
                 schedule.mutateBit(mutateIndex);
@@ -25,7 +25,7 @@ public class ScheduleMutator {
         int iterationCount = 0;
         while (iterationCount < safeGuard) {
             bool isValid = true;
-            int randomIndex = geneticRandom.Next(0, schedule.getSchedule().Length - clumpIndexes.Count + 1);
+            int randomIndex = geneticRandom.Next(0, schedule.scheduleSize - clumpIndexes.Count + 1);
             for (int i = 0; i < clumpIndexes.Count; i++) {
                 if (schedule.getBitValue(randomIndex+i)) {
                     isValid = false;
@@ -97,7 +97,7 @@ public class ScheduleMutator {
                 }
                 else { //Right shift
                     int workingIndex = clump[clump.Count-1];
-                    while (workingIndex < schedule.getSchedule().Length-1 &&!schedule.getBitValue(workingIndex+1)) {
+                    while (workingIndex < schedule.scheduleSize-1 &&!schedule.getBitValue(workingIndex+1)) {
                         workingIndex++;
                     }
                     for (int i = clump.Count-1; i >= 0; i--) {
@@ -140,36 +140,43 @@ public class ScheduleMutator {
                 schedule = MutateSingleBit(schedule, loneSegments[0]);
             }
             else if (loneSegments.Count > 1) {
+                ShuffleList(loneSegments);
                 MutateSingleClump(schedule, loneSegments.Take(geneticRandom.Next(0, loneSegments.Count)).ToList());
             }
         }
         return schedule;
     }
 
+    public void ShuffleList<T>(IList<T> list)
+    {
+        // Start from the end and swap each item with a randomly selected item before it.
+        for (int i = list.Count - 1; i > 0; i--)
+        {
+            int j = geneticRandom.Next(i + 1); // j is in [0..i]
+            // Swap list[i] with list[j]
+            T temp = list[i];
+            list[i] = list[j];
+            list[j] = temp;
+        }
+    }
+
     // Pseudocode or a helper method:
     public int FindExactFitSpot(ScheduleBitMap schedule, int clumpSize)
     {
-        // Get the total length of the schedule
-        int scheduleSize = schedule.getSchedule().Length;
+        int scheduleSize = schedule.scheduleSize;
 
-        // If the clump can't fit at all, return immediately
         if (clumpSize > scheduleSize) 
             return -1;
 
-        // Generate one random start index (only up to scheduleSize - clumpSize)
         int randomStart = ScheduleMutator.geneticRandom.Next(0, scheduleSize - clumpSize + 1);
 
-        // Check if all bits from randomStart..randomStart + clumpSize-1 are free
         for (int offset = 0; offset < clumpSize; offset++)
         {
             if (schedule.getBitValue(randomStart + offset))
             {
-                // If any bit is occupied, fail immediately
                 return -1;
             }
         }
-
-        // If we got here, all bits in the clump are free
         return randomStart;
     }
 

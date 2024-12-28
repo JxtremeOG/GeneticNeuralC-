@@ -1,4 +1,5 @@
-﻿using MathNet.Numerics.LinearAlgebra;
+﻿using Google.Protobuf;
+using MathNet.Numerics.LinearAlgebra;
 
 class Program
 {
@@ -63,17 +64,19 @@ class Program
         }
 
         for (int i = 0; i < dataSetSize; i++) {
-            int taskSize = random.Next(1,13);
+            // int taskSize = random.Next(1,13);
+            Console.WriteLine("Enter task size: ");
+            int taskSize = int.Parse(Console.ReadLine());
             GeneticAlgorithmGenerate geneticAlgorithm = new GeneticAlgorithmGenerate(
                 scheduleSize, taskSize, populationSize, mutationChance, generationLimit, immigrantCountPercent/100 * populationSize);
             ScheduleBitMap topPerformer = geneticAlgorithm.TrainGenetically();
             printSchedule(topPerformer);
-            Console.WriteLine($"Top performer fitness: {topPerformer.fitness} with task size: {taskSize}");
+            Console.WriteLine($"Top performer fitness: {topPerformer.fitness} \nTask size: {taskSize} \nDeviation: {topPerformer.scheduleDeviation}");
         }
     }
 
     public static void printSchedule(ScheduleBitMap schedule) {
-        for (int i = 0; i < schedule.getSchedule().Length; i++) {
+        for (int i = 0; i < schedule.scheduleSize; i++) {
             if ((i) % 96 == 0) {
                 Console.WriteLine($"Day: {(int)(i/96)}");
             }

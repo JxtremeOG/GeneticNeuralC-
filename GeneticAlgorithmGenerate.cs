@@ -6,12 +6,15 @@ using Tensorflow;
 public class ScheduleBitMap {
     public static Random random = new Random();
     private BitArray schedule;
+    public int scheduleSize;
+    public double scheduleDeviation;
     private BitArray scheduleBase;
     public double fitness;
     public HashSet<int> taskIndexes = new HashSet<int>();
     public ScheduleBitMap(BitArray schedulePassed) {
         schedule = schedulePassed;
         scheduleBase = schedulePassed;
+        scheduleSize = schedulePassed.Length;
         fitness = 0;
     }
     public void addTask(int taskSize) {
