@@ -53,10 +53,10 @@ class Program
     static void Main() {
         Random random = new Random();
         int mutationChance = 60; //% chance out of 100
-        int scheduleSize = 96*7; //96 segments in a day. 1344 in 2 weeks
+        int scheduleSize = 96*14; //96 segments in a day. 1344 in 2 weeks
         int dataSetSize = 1;
-        int populationSize = 15000;
-        int generationLimit = 500;
+        int populationSize = 5000;
+        int generationLimit = 300;
         int immigrantCountPercent = 2;
 
         if (populationSize * immigrantCountPercent / 100 % 1 != 0) {
@@ -71,7 +71,7 @@ class Program
                 scheduleSize, taskSize, populationSize, mutationChance, generationLimit, immigrantCountPercent/100 * populationSize);
             ScheduleBitMap topPerformer = geneticAlgorithm.TrainGenetically();
             printSchedule(topPerformer);
-            Console.WriteLine($"Top performer fitness: {topPerformer.fitness} \nTask size: {taskSize} \nDeviation: {topPerformer.scheduleDeviation}");
+            Console.WriteLine($"Top performer fitness: {topPerformer.fitness} \nTask size: {taskSize} \nDeviation: {topPerformer.scheduleDeviation} \nTime elapsed: {geneticAlgorithm.geneticStopWatch.Elapsed}");
         }
     }
 

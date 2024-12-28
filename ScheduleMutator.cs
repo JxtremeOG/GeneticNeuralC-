@@ -2,7 +2,7 @@ using MathNet.Numerics;
 using Tensorflow;
 
 public class ScheduleMutator {
-    public static Random geneticRandom = new Random();
+    private static ThreadLocal<Random> threadLocalRandom = new ThreadLocal<Random>(() => new Random());
     public static int safeGuard = 20;
     public static int mutationChance;
     public ScheduleMutator(int MutationChance) {
@@ -11,7 +11,7 @@ public class ScheduleMutator {
     public ScheduleBitMap MutateSingleBit(ScheduleBitMap schedule, int mutateIndex) {
         int iterationCount = 0;
         while (true && iterationCount < safeGuard) {
-            int randomIndex = geneticRandom.Next(0, schedule.scheduleSize);
+            int randomIndex = threadLocalRandom.Value.Next(0, schedule.scheduleSize);
             if (!schedule.getBitValue(randomIndex)) {
                 schedule.mutateBit(randomIndex);
                 schedule.mutateBit(mutateIndex);
@@ -25,7 +25,7 @@ public class ScheduleMutator {
         int iterationCount = 0;
         while (iterationCount < safeGuard) {
             bool isValid = true;
-            int randomIndex = geneticRandom.Next(0, schedule.scheduleSize - clumpIndexes.Count + 1);
+            int randomIndex = threadLocalRandom.Value.Next(0, schedule.scheduleSize - clumpIndexes.Count + 1);
             for (int i = 0; i < clumpIndexes.Count; i++) {
                 if (schedule.getBitValue(randomIndex+i)) {
                     isValid = false;
@@ -49,7 +49,7 @@ public class ScheduleMutator {
     public ScheduleBitMap Mutate(ScheduleBitMap schedule) {
         List<List<int>> taskClumps = getTaskClumps(schedule);
 
-        int mutationType = geneticRandom.Next(1, 5);
+        int mutationType = threadLocalRandom.Value.Next(1, 5);
         switch (mutationType) {
             case 0: return MutateBitMode(schedule);            //Unused
             case 1: return MutateClumpMode(schedule, taskClumps);
@@ -62,10 +62,8 @@ public class ScheduleMutator {
 
     public ScheduleBitMap MutateBitMode(ScheduleBitMap schedule) {
         //Single bit mutation
-        var taskIndicesCopy = schedule.taskIndexes.ToList();
-        taskIndicesCopy.Sort();
-        foreach (int i in taskIndicesCopy) {
-            if (geneticRandom.Next(0, 100) < mutationChance) {
+        foreach (int i in schedule.taskIndexes) {
+            if (threadLocalRandom.Value.Next(0, 100) < mutationChance) {
                 schedule = MutateSingleBit(schedule, i);
             }
         }
@@ -75,7 +73,7 @@ public class ScheduleMutator {
         //Task clump mutation
         
         foreach (List<int> clump in taskClumps) {
-            if (geneticRandom.Next(0, 100) < mutationChance) {
+            if (threadLocalRandom.Value.Next(0, 100) < mutationChance) {
                 MutateSingleClump(schedule, clump);
             }
         }
@@ -84,8 +82,8 @@ public class ScheduleMutator {
     public ScheduleBitMap MutateShiftMode(ScheduleBitMap schedule, List<List<int>> taskClumps) {
 
         foreach (List<int> clump in taskClumps) {
-            if (geneticRandom.Next(0, 100) < mutationChance) {
-                if (geneticRandom.Next(0, 2) == 1) { //Left shift
+            if (threadLocalRandom.Value.Next(0, 100) < mutationChance) {
+                if (threadLocalRandom.Value.Next(0, 2) == 1) { //Left shift
                     int workingIndex = clump[0];
                     while (workingIndex > 0 && !schedule.getBitValue(workingIndex-1)) {
                         workingIndex--;
@@ -111,7 +109,7 @@ public class ScheduleMutator {
     }
     public ScheduleBitMap MutateExactFitMode(ScheduleBitMap schedule, List<List<int>> taskClumps) {
         foreach (List<int> clump in taskClumps) {
-            if (geneticRandom.Next(0, 100) < mutationChance) {
+            if (threadLocalRandom.Value.Next(0, 100) < mutationChance) {
                 int clumpSize = clump.Count;
                 int possibleStart = FindExactFitSpot(schedule, clumpSize);
 
@@ -130,7 +128,7 @@ public class ScheduleMutator {
     }
     public ScheduleBitMap MutateCombineLoneSegments(ScheduleBitMap schedule, List<List<int>> taskClumps) {
         List<int> loneSegments = new List<int>();
-        if (geneticRandom.Next(0, 100) < mutationChance) {
+        if (threadLocalRandom.Value.Next(0, 100) < mutationChance) {
             foreach (List<int> clump in taskClumps) {
                 if (clump.Count == 1) {
                     loneSegments.Add(clump[0]);
@@ -141,7 +139,7 @@ public class ScheduleMutator {
             }
             else if (loneSegments.Count > 1) {
                 ShuffleList(loneSegments);
-                MutateSingleClump(schedule, loneSegments.Take(geneticRandom.Next(0, loneSegments.Count)).ToList());
+                MutateSingleClump(schedule, loneSegments.Take(threadLocalRandom.Value.Next(0, loneSegments.Count)).ToList());
             }
         }
         return schedule;
@@ -152,7 +150,7 @@ public class ScheduleMutator {
         // Start from the end and swap each item with a randomly selected item before it.
         for (int i = list.Count - 1; i > 0; i--)
         {
-            int j = geneticRandom.Next(i + 1); // j is in [0..i]
+            int j = threadLocalRandom.Value.Next(i + 1); // j is in [0..i]
             // Swap list[i] with list[j]
             T temp = list[i];
             list[i] = list[j];
@@ -161,40 +159,40 @@ public class ScheduleMutator {
     }
 
     // Pseudocode or a helper method:
-    public int FindExactFitSpot(ScheduleBitMap schedule, int clumpSize)
-    {
-        int scheduleSize = schedule.scheduleSize;
-
-        if (clumpSize > scheduleSize) 
-            return -1;
-
-        int randomStart = ScheduleMutator.geneticRandom.Next(0, scheduleSize - clumpSize + 1);
-
-        for (int offset = 0; offset < clumpSize; offset++)
-        {
-            if (schedule.getBitValue(randomStart + offset))
-            {
-                return -1;
+    public int FindExactFitSpot(ScheduleBitMap schedule, int clumpSize) {
+        for (int start = 0; start <= schedule.scheduleSize - clumpSize; start++) {
+            bool fit = true;
+            for (int offset = 0; offset < clumpSize; offset++) {
+                if (schedule.getBitValue(start + offset)) {
+                    fit = false;
+                    break;
+                }
             }
+            if (fit) return start;
         }
-        return randomStart;
+        return -1;
     }
 
     public List<List<int>> getTaskClumps(ScheduleBitMap schedule) {
         List<List<int>> taskClumps = new List<List<int>>();
+        List<int> sortedTaskIndexes = schedule.taskIndexes.OrderBy(x => x).ToList();
         List<int> currentClump = new List<int>();
-        List<int> sortedTaskIndexes = schedule.taskIndexes.ToList();
-        sortedTaskIndexes.Sort();
-        for (int i = 0; i < schedule.taskIndexes.Count; i++) {
-            currentClump.Add(sortedTaskIndexes[i]);
-            if (i >= schedule.taskIndexes.Count-1) {
-                taskClumps.Add(currentClump);
-            }
-            else if (sortedTaskIndexes[i] + 1 != sortedTaskIndexes[i+1]) {
-                taskClumps.Add(currentClump);
-                currentClump = new List<int>();
+
+        foreach (int index in sortedTaskIndexes) {
+            if (currentClump.Count == 0 || index == currentClump.Last() + 1) {
+                currentClump.Add(index);
+            } else {
+                taskClumps.Add(new List<int>(currentClump));
+                currentClump.Clear();
+                currentClump.Add(index);
             }
         }
+
+        if (currentClump.Count > 0) {
+            taskClumps.Add(currentClump);
+        }
+
         return taskClumps;
     }
+
 }

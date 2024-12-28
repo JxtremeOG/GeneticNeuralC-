@@ -1,8 +1,17 @@
 using System.Collections;
-using System.Formats.Asn1;
-using System.Transactions;
-using Tensorflow;
+using System.Collections.Concurrent;
+using System.Diagnostics;
 
+public static class ThreadSafeRandom
+{
+    private static int seed = Environment.TickCount;
+
+    private static ThreadLocal<Random> threadLocalRandom = new ThreadLocal<Random>(
+        () => new Random(Interlocked.Increment(ref seed))
+    );
+
+    public static Random Instance => threadLocalRandom.Value;
+}
 public class ScheduleBitMap {
     public static Random random = new Random();
     private BitArray schedule;
@@ -66,7 +75,7 @@ public class GeneticAlgorithmGenerate {
     public static Random random = new Random();
     public int scheduleSize;
     public int mutationChance;
-
+    public Stopwatch geneticStopWatch = Stopwatch.StartNew();
     public ScheduleBitMap overallBestSchedule;
     public int immigrantCount;
     public int generationCount;
@@ -132,6 +141,7 @@ public class GeneticAlgorithmGenerate {
         }
     }
     public ScheduleBitMap TrainGenetically() {
+        geneticStopWatch.Start();
         ScheduleMutator scheduleMutator = new ScheduleMutator(mutationChance);
         int generationsWithoutImprovementLimit = 50;
         int generationsWithoutImprovement = 0;
@@ -140,12 +150,20 @@ public class GeneticAlgorithmGenerate {
         generateFreshPopulation();
         overallBestSchedule = population[0];
         fitnessCore.PreCalculateClumpScores(scheduleSize);
+        fitnessCore.PreCalculateTaskClumpScores(taskSize);
         for (int i = 0; i < generationCount; i++) {
             // Console.WriteLine($"Generation: {i} and population size: {population.Count}");
-            foreach (ScheduleBitMap schedule in population) {
+            ParallelOptions parallelOptions = new ParallelOptions{ MaxDegreeOfParallelism = 16  /* limit to 4 concurrent threads */ };
+
+            Parallel.ForEach(population, parallelOptions, schedule =>
+            {
                 schedule.fitness = 0;
                 fitnessCore.FitnessFunction(schedule);
-            }
+            });
+            // foreach (ScheduleBitMap schedule in population) {
+            //     schedule.fitness = 0;
+            //     fitnessCore.FitnessFunction(schedule);
+            // }
             int remianingPopulation = (int)(populationSize * .3); //.1 = 10% of the population
             List<ScheduleBitMap> newPopulation = new List<ScheduleBitMap>();
             newPopulation = population.OrderByDescending(x => x.fitness).Take(remianingPopulation).ToList();
@@ -185,22 +203,54 @@ public class GeneticAlgorithmGenerate {
                     newPopulation.Add(addedSchedule);
                 }
                 
-                while (newPopulation.Count < populationSize) {
-                    ScheduleBitMap parent1 = population[geneticRandom.Next(0, population.Count)];
-                    ScheduleBitMap parent2 = population[geneticRandom.Next(0, population.Count)];
+                int remaining = populationSize - newPopulation.Count;
+                int batchSize = 40; // Adjust based on performance tests
 
-                    Tuple<ScheduleBitMap, ScheduleBitMap> children = CrossOver(parent1, parent2);
-                    ScheduleBitMap child1 = scheduleMutator.Mutate(children.Item1);
-                    ScheduleBitMap child2 = scheduleMutator.Mutate(children.Item2);
+                var parentPairs = new List<Tuple<ScheduleBitMap, ScheduleBitMap>>();
+                for (int j = 0; j < remaining / 2; j++)
+                {
+                    ScheduleBitMap parent1 = population[ThreadSafeRandom.Instance.Next(0, population.Count)];
+                    ScheduleBitMap parent2 = population[ThreadSafeRandom.Instance.Next(0, population.Count)];
+                    parentPairs.Add(new Tuple<ScheduleBitMap, ScheduleBitMap>(parent1, parent2));
+                }
 
+                var childBag = new ConcurrentBag<ScheduleBitMap>();
+
+                Parallel.ForEach(parentPairs, new ParallelOptions { MaxDegreeOfParallelism = 16 }, pair =>
+                {
+                    var children = CrossOver(pair.Item1, pair.Item2);
+                    var child1 = scheduleMutator.Mutate(children.Item1);
+                    var child2 = scheduleMutator.Mutate(children.Item2);
+                    childBag.Add(child1);
+                    childBag.Add(child2);
+                });
+
+                // Add children to newPopulation
+                foreach (var child in childBag)
+                {
+                    if (newPopulation.Count >= populationSize)
+                        break;
+                    newPopulation.Add(child);
+                }
+
+                // Handle odd population sizes
+                while (newPopulation.Count < populationSize)
+                {
+                    ScheduleBitMap parent1 = population[ThreadSafeRandom.Instance.Next(0, population.Count)];
+                    ScheduleBitMap parent2 = population[ThreadSafeRandom.Instance.Next(0, population.Count)];
+                    var children = CrossOver(parent1, parent2);
+                    var child1 = scheduleMutator.Mutate(children.Item1);
                     newPopulation.Add(child1);
-                    if (newPopulation.Count < populationSize) {
+                    if (newPopulation.Count < populationSize)
+                    {
+                        var child2 = scheduleMutator.Mutate(children.Item2);
                         newPopulation.Add(child2);
                     }
                 }
                 population = newPopulation;
             }
         }
+        geneticStopWatch.Stop();
         return overallBestSchedule;
     }
 
@@ -215,16 +265,12 @@ public class GeneticAlgorithmGenerate {
 
         int halfCount = (int)(combinedParentTasks.Count / 2);
         while (child1TaskIndex.Count != child1TaskIndex.Distinct().ToList().Count || child1TaskIndex.Count == 0) {
-            child1TaskIndex = combinedParentTasks
-                .OrderBy(_ => Guid.NewGuid())
-                .Take(halfCount)              
-                .ToList();
+            Shuffle(combinedParentTasks, geneticRandom); 
+            child1TaskIndex = combinedParentTasks.Take(halfCount).ToList();
         }
         while (child2TaskIndex.Count != child2TaskIndex.Distinct().ToList().Count || child2TaskIndex.Count == 0) {
-            child2TaskIndex = combinedParentTasks
-                .OrderBy(_ => Guid.NewGuid())
-                .Take(halfCount)              
-                .ToList();
+            Shuffle(combinedParentTasks, geneticRandom); 
+            child2TaskIndex = combinedParentTasks.Take(halfCount).ToList();
         }
         for (int i = 0; i < taskSize; i++) {
             childSchedule1.mutateBit(child1TaskIndex[i]);
@@ -234,4 +280,10 @@ public class GeneticAlgorithmGenerate {
         // Console.WriteLine($"Child 1: {childSchedule1.taskIndexs.Count} Child 2: {childSchedule2.taskIndexs.Count}");
         return new Tuple<ScheduleBitMap, ScheduleBitMap>(childSchedule1, childSchedule2);
     }
+    public void Shuffle<T>(IList<T> list, Random rng) {
+    for (int i = list.Count - 1; i > 0; i--) {
+        int j = rng.Next(i + 1);
+        (list[i], list[j]) = (list[j], list[i]);
+    }
+}
 }
