@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Text;
+using MathNet.Numerics.LinearAlgebra;
 
 public class BinaryFileHandler
 {
@@ -64,7 +65,7 @@ public class BinaryFileHandler
 
 
 
-    public List<NeuralScheduleHandler> FileToDataSet(string relativeFilePath)
+    public Tuple<List<NeuralScheduleHandler>, List<Matrix<double>>, List<Matrix<double>>> FileToDataSet(string relativeFilePath)
     {
         List<string> dataEntries = new List<string>();
         string currentDirectory = AppDomain.CurrentDomain.BaseDirectory;
@@ -96,12 +97,18 @@ public class BinaryFileHandler
         }
 
         List<NeuralScheduleHandler> dataExamples = new List<NeuralScheduleHandler>();
+        List<Matrix<double>> xTrain = new List<Matrix<double>>();
+        List<Matrix<double>> yTrain = new List<Matrix<double>>();
 
         foreach (string dataString in dataEntries) {
-            dataExamples.Add(new NeuralScheduleHandler(dataString));
+            NeuralScheduleHandler dataExample = new NeuralScheduleHandler(dataString);
+            dataExample.CreateMatrixs();
+            xTrain.Add(dataExample.inputData);
+            yTrain.Add(dataExample.outputData);
+            dataExamples.Add(dataExample);
         }
 
-        return dataExamples;
+        return new Tuple<List<NeuralScheduleHandler>, List<Matrix<double>>, List<Matrix<double>>>(dataExamples, xTrain, yTrain);
     }
 
 

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using MathNet.Numerics.LinearAlgebra;
 
 public class NeuralNetwork {
@@ -41,6 +42,8 @@ public class NeuralNetwork {
     {
         for (int e = 0; e < epochs; e++)
         {
+            Stopwatch stopwatch = new Stopwatch();
+            stopwatch.Start();
             double error = 0.0;
 
             // Assume xTrain.Count == yTrain.Count
@@ -66,10 +69,10 @@ public class NeuralNetwork {
 
             // average error over the dataset
             error /= xTrain.Count;
-
+            stopwatch.Stop();
             if (verbose)
             {
-                Console.WriteLine($"{e + 1}/{epochs}, error={error}");
+                Console.WriteLine($"{e + 1}/{epochs}, error: {error*100}%, time elapsed: {stopwatch.Elapsed}");
             }
         }
     }

@@ -90,7 +90,10 @@ class Program
             Console.WriteLine($"Training for {dataSetSize} data examples elapsed over {primaryStopWatch.Elapsed}");
         }
         else {
-            List<NeuralScheduleHandler> scheduleDataSet = fileHandler.FileToDataSet("ScheduleData/calendarTrainData.bin");
+            var data = fileHandler.FileToDataSet("ScheduleData/calendarTrainData.bin");
+            List<NeuralScheduleHandler> scheduleDataSet = data.Item1;
+            List<Matrix<double>> inputDataSet = data.Item2;
+            List<Matrix<double>> outputDataSet = data.Item3;
             Console.WriteLine($"{scheduleDataSet.Count} data examples read");
             Console.WriteLine($"Train Model? Y or N");
             if (Console.ReadLine() == "N") {
@@ -110,7 +113,7 @@ class Program
                 }
             );
 
-            // network.Train(network.MeanSquaredError, network.MeanSquaredErrorPrime)
+            network.Train(network.MeanSquaredError, network.MeanSquaredErrorPrime, inputDataSet, outputDataSet, 100, 0.1, true);
         }
     }
 

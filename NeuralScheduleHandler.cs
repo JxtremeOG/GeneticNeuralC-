@@ -1,4 +1,5 @@
 using System.Collections;
+using MathNet.Numerics.LinearAlgebra;
 
 public class NeuralScheduleHandler {
     public Dictionary<string, int> binaryToIntMap = new Dictionary<string, int>
@@ -9,11 +10,14 @@ public class NeuralScheduleHandler {
         { "011",  1 },
         { "100",  2 }
     };
-    BitArray baseSchedule;
-    BitArray finalSchedule;
-    BitArray taskSegments;
-    List<int> timeOfDayPreferences;
-    List<int> dayPreferences;
+    public BitArray baseSchedule;
+    public BitArray finalSchedule;
+    public BitArray taskSegments;
+    public List<double> timeOfDayPreferences;
+    public List<double> dayPreferences;
+
+    public Matrix<double> inputData;
+    public Matrix<double> outputData;
     public NeuralScheduleHandler(string binaryString) {
         //1344 Base Schedule
         //12 task segments
@@ -38,6 +42,30 @@ public class NeuralScheduleHandler {
         dayPreferences = MapBinaryStringToList(daysString);
     }
 
+    public void CreateMatrixs() {
+        List<double> baseShceduleList = baseSchedule.Cast<bool>().Select(bit => bit ? 0.0 : 1.0).ToList(); //Also reverse so 0 == taken spot
+        List<double> taskSegmentsList = taskSegments.Cast<bool>().Select(bit => bit ? 1.0 : 0.0).ToList();
+        List<double> masterCombined = baseShceduleList
+            .Concat(taskSegmentsList)
+            .Concat(timeOfDayPreferences)
+            .Concat(dayPreferences)
+            .ToList();
+
+        inputData = Matrix<double>.Build.Dense(
+            1,                           // number of rows
+            masterCombined.Count,           // number of columns
+            (r, c) => masterCombined[c]     // fill function
+        );
+
+        List<double> finalScheduleList = finalSchedule.Cast<bool>().Select(bit => bit ? 0.0 : 1.0).ToList(); //Also reverse so 0 == taken spot
+
+        outputData = Matrix<double>.Build.Dense(
+            1,                           // number of rows
+            finalScheduleList.Count,           // number of columns
+            (r, c) => finalScheduleList[c]     // fill function
+        );
+    }
+
     public BitArray BinaryStringToBitArray(string binaryString)
     {
         if (string.IsNullOrEmpty(binaryString))
@@ -53,7 +81,7 @@ public class NeuralScheduleHandler {
 
         return new BitArray(boolArray);
     }
-    public List<int> MapBinaryStringToList(string binaryString)
+    public List<double> MapBinaryStringToList(string binaryString)
     {
         const int segmentLength = 3;
         
@@ -62,7 +90,7 @@ public class NeuralScheduleHandler {
             throw new ArgumentException($"Binary string length must be a multiple of {segmentLength}.");
         }
 
-        List<int> preferences = new List<int>();
+        List<double> preferences = new List<double>();
         
         for (int i = 0; i < binaryString.Length; i += segmentLength)
         {
