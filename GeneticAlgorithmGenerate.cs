@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Text;
 
 public static class ThreadSafeRandom
 {
@@ -70,6 +71,14 @@ public class ScheduleBitMap {
 }
 
 public class GeneticAlgorithmGenerate {
+    public Dictionary<int, string> intToBinaryMap = new Dictionary<int, string>
+        {
+            { -2, "000" },
+            { -1, "001" },
+            {  0, "010" },
+            {  1, "011" },
+            {  2, "100" }
+        };
     public int populationSize;
     public int taskSize;
     public static Random random = new Random();
@@ -95,6 +104,73 @@ public class GeneticAlgorithmGenerate {
         generationCount = generationSizePassed;
         immigrantCount = immigrantCountPassed;
         scheduleBase = GenerateOrganizedSchedule();
+    }
+    public string Convert2DArrayToBinary(List<List<int>> array)
+    {
+        StringBuilder sb = new StringBuilder();
+
+        foreach (var row in array)
+        {
+            foreach (var value in row)
+            {
+                if (intToBinaryMap.ContainsKey(value))
+                {
+                    sb.Append(intToBinaryMap[value]);
+                }
+                else
+                {
+                    throw new ArgumentException($"Value {value} is out of the allowed range (-2 to 2).");
+                }
+            }
+        }
+
+        return sb.ToString();
+    }
+
+    public string Convert1DArrayToBinary(List<int> array)
+    {
+        StringBuilder sb = new StringBuilder();
+
+        foreach (var value in array)
+        {
+            if (intToBinaryMap.ContainsKey(value))
+            {
+                sb.Append(intToBinaryMap[value]);
+            }
+            else
+            {
+                throw new ArgumentException($"Value {value} is out of the allowed range (-2 to 2).");
+            }
+        }
+
+        return sb.ToString();
+    }
+    public byte[] BinaryStringToByteArray(string binary)
+    {
+        // Calculate the number of bytes needed
+        int numBytes = (binary.Length + 7) / 8;
+
+        // Pad the binary string with '0's to make its length a multiple of 8
+        binary = binary.PadRight(numBytes * 8, '0');
+
+        byte[] bytes = new byte[numBytes];
+        for (int i = 0; i < numBytes; i++)
+        {
+            string byteString = binary.Substring(8 * i, 8);
+            bytes[i] = Convert.ToByte(byteString, 2);
+        }
+
+        return bytes;
+    }
+
+    public string SaveDataInfo(ScheduleBitMap schedule) {
+        string scheduleBase = string.Concat(schedule.getBaseSchedule().Cast<bool>().Select(bit => bit ? "1" : "0"));
+        string scheduleResult = string.Concat(schedule.getSchedule().Cast<bool>().Select(bit => bit ? "1" : "0"));
+        string taskSegments = new string('1', taskSize).PadRight(12, '0');
+        string preferredTimes = Convert2DArrayToBinary(fitnessCore.timeOfDayPreferences);
+        string preferredDays = Convert1DArrayToBinary(fitnessCore.preferredDays);
+
+        return scheduleBase + taskSegments + preferredTimes + preferredDays + scheduleResult;
     }
     public BitArray GenerateRandomSchedule() {
         BitArray schedule = new BitArray(scheduleSize);
@@ -174,7 +250,7 @@ public class GeneticAlgorithmGenerate {
             }
 
             if (i % 10 == 0) {
-                Console.WriteLine($"Generation: {i} Top performer fitness: {currentBestFitness} Overall best fitness: {overallBestSchedule.fitness}");
+                // Console.WriteLine($"Generation: {i} Top performer fitness: {currentBestFitness} Overall best fitness: {overallBestSchedule.fitness}");
                 newPopulation.Add(scheduleMutator.MutateShiftMode(newPopulation[0], scheduleMutator.getTaskClumps(newPopulation[0])));
             }
 
@@ -187,7 +263,7 @@ public class GeneticAlgorithmGenerate {
             previousBestFitness = currentBestFitness;
 
             if (generationsWithoutImprovement > generationsWithoutImprovementLimit) {
-                Console.WriteLine($"No improvement for {generationsWithoutImprovementLimit} generations. Generating fresh population");
+                // Console.WriteLine($"No improvement for {generationsWithoutImprovementLimit} generations. Generating fresh population");
                 generateFreshPopulation();
                 generationsWithoutImprovement = 0;
             }

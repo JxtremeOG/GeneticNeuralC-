@@ -1,0 +1,99 @@
+using System.Collections;
+
+public class NeuralScheduleHandler {
+    public Dictionary<string, int> binaryToIntMap = new Dictionary<string, int>
+    {
+        { "000", -2 },
+        { "001", -1 },
+        { "010",  0 },
+        { "011",  1 },
+        { "100",  2 }
+    };
+    BitArray baseSchedule;
+    BitArray finalSchedule;
+    BitArray taskSegments;
+    List<int> timeOfDayPreferences;
+    List<int> dayPreferences;
+    public NeuralScheduleHandler(string binaryString) {
+        //1344 Base Schedule
+        //12 task segments
+        //84 time of days
+        //21 days
+        //1344 final schedule
+        // == 2805
+        if (binaryString.Length != 2808)
+            throw new Exception($"Unexpected data example length");
+
+        string baseScheduleString = binaryString.Substring(0, 1344);
+        string taskSegmentsString = binaryString.Substring(1344, 12);
+        string timeOfDayString = binaryString.Substring(1344+12, 84);
+        string daysString = binaryString.Substring(1344+12+84, 21);
+        string finalScheduleString = binaryString.Substring(1344+12+84+21, 1344);
+
+        baseSchedule = BinaryStringToBitArray(baseScheduleString);
+        taskSegments = BinaryStringToBitArray(taskSegmentsString);
+        finalSchedule = BinaryStringToBitArray(finalScheduleString);
+
+        timeOfDayPreferences = MapBinaryStringToList(timeOfDayString);
+        dayPreferences = MapBinaryStringToList(daysString);
+    }
+
+    public BitArray BinaryStringToBitArray(string binaryString)
+    {
+        if (string.IsNullOrEmpty(binaryString))
+            throw new ArgumentException("Binary string cannot be null or empty.");
+
+        // Convert each character to a boolean: '1' => true, '0' => false
+        bool[] boolArray = binaryString.Select(c =>
+        {
+            if (c == '1') return true;
+            if (c == '0') return false;
+            throw new ArgumentException($"Invalid character '{c}' in binary string. Only '0' and '1' are allowed.");
+        }).ToArray();
+
+        return new BitArray(boolArray);
+    }
+    public List<int> MapBinaryStringToList(string binaryString)
+    {
+        const int segmentLength = 3;
+        
+        if (binaryString.Length % segmentLength != 0)
+        {
+            throw new ArgumentException($"Binary string length must be a multiple of {segmentLength}.");
+        }
+
+        List<int> preferences = new List<int>();
+        
+        for (int i = 0; i < binaryString.Length; i += segmentLength)
+        {
+            string segment = binaryString.Substring(i, segmentLength);
+            
+            if (!binaryToIntMap.TryGetValue(segment, out int mappedValue))
+            {
+                throw new KeyNotFoundException($"The binary segment '{segment}' is not defined in the binaryToIntMap.");
+            }
+            
+            preferences.Add(mappedValue);
+        }
+        
+        return preferences;
+    }
+
+    public byte[] BinaryStringToByteArray(string binary)
+    {
+        // Calculate the number of bytes needed
+        int numBytes = (binary.Length + 7) / 8;
+
+        // Pad the binary string with '0's to make its length a multiple of 8
+        binary = binary.PadRight(numBytes * 8, '0');
+
+        byte[] bytes = new byte[numBytes];
+        for (int i = 0; i < numBytes; i++)
+        {
+            string byteString = binary.Substring(8 * i, 8);
+            bytes[i] = Convert.ToByte(byteString, 2);
+        }
+
+        return bytes;
+    }
+}

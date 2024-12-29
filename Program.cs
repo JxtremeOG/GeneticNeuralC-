@@ -51,27 +51,40 @@ class Program
     // }
 
     static void Main() {
-        Random random = new Random();
-        int mutationChance = 60; //% chance out of 100
-        int scheduleSize = 96*14; //96 segments in a day. 1344 in 2 weeks
-        int dataSetSize = 1;
-        int populationSize = 5000;
-        int generationLimit = 300;
-        int immigrantCountPercent = 2;
+        BinaryFileHandler fileHandler = new BinaryFileHandler();
+        Console.WriteLine("1. Write Data or 2. Read Data");
+        if (int.Parse(Console.ReadLine()) == 1) {
+            Console.WriteLine("Enter data set size: ");
+            Random random = new Random();
+            int mutationChance = 60; //% chance out of 100
+            int scheduleSize = 96*14; //96 segments in a day. 1344 in 2 weeks
+            int dataSetSize = int.Parse(Console.ReadLine());
+            int populationSize = 5000;
+            int generationLimit = 300;
+            int immigrantCountPercent = 2;
 
-        if (populationSize * immigrantCountPercent / 100 % 1 != 0) {
-            throw new Exception("Population size must be divisible by immigrant count percent");
+            if (populationSize * immigrantCountPercent / 100 % 1 != 0) {
+                throw new Exception("Population size must be divisible by immigrant count percent");
+            }
+
+            for (int i = 0; i < dataSetSize; i++) {
+                int taskSize = random.Next(1,13);
+                // Console.WriteLine("Enter task size: ");
+                // int taskSize = int.Parse(Console.ReadLine());
+                GeneticAlgorithmGenerate geneticAlgorithm = new GeneticAlgorithmGenerate(
+                    scheduleSize, taskSize, populationSize, mutationChance, generationLimit, immigrantCountPercent/100 * populationSize);
+                ScheduleBitMap topPerformer = geneticAlgorithm.TrainGenetically();
+                printSchedule(topPerformer);
+                // Console.WriteLine(geneticAlgorithm.SaveDataInfo(topPerformer));
+                Console.WriteLine($"Top performer fitness: {topPerformer.fitness} \nTask size: {taskSize} \nDeviation: {topPerformer.scheduleDeviation} \nTime elapsed: {geneticAlgorithm.geneticStopWatch.Elapsed}");
+                string binaryData = geneticAlgorithm.SaveDataInfo(topPerformer);
+                int tsrt = binaryData.Count();
+                byte[] binaryBytes = geneticAlgorithm.BinaryStringToByteArray(binaryData);
+                fileHandler.SaveToBinaryFile(binaryBytes, "ScheduleData/calendarTrainData.bin");
+            }
         }
-
-        for (int i = 0; i < dataSetSize; i++) {
-            // int taskSize = random.Next(1,13);
-            Console.WriteLine("Enter task size: ");
-            int taskSize = int.Parse(Console.ReadLine());
-            GeneticAlgorithmGenerate geneticAlgorithm = new GeneticAlgorithmGenerate(
-                scheduleSize, taskSize, populationSize, mutationChance, generationLimit, immigrantCountPercent/100 * populationSize);
-            ScheduleBitMap topPerformer = geneticAlgorithm.TrainGenetically();
-            printSchedule(topPerformer);
-            Console.WriteLine($"Top performer fitness: {topPerformer.fitness} \nTask size: {taskSize} \nDeviation: {topPerformer.scheduleDeviation} \nTime elapsed: {geneticAlgorithm.geneticStopWatch.Elapsed}");
+        else {
+            Console.WriteLine(fileHandler.FileToDataSet("ScheduleData/calendarTrainData.bin").Count);
         }
     }
 

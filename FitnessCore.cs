@@ -5,7 +5,17 @@ using MathNet.Numerics.LinearAlgebra;
 
 public class FitnessCore {
     public FitnessCore() {
+        timeOfDayPreferences = Enumerable.Range(0, 7) // Outer list of 7
+        .Select(_ => Enumerable.Range(0, 4) // Inner list of 4
+            .Select(__ => random.Next(-2, 3)) // Generate random int between -2 and 2
+            .ToList())
+        .ToList();
+        preferredDays = Enumerable.Range(0, 7) // Inner list of 7
+            .Select(__ => random.Next(-2, 3)) // Generate random int between -2 and 2
+            .ToList();
+        
     }
+    public Random random = new Random();
     public HashSet<double> clumpScores = new HashSet<double>();
     public HashSet<double> taskClumpScores = new HashSet<double>();
     public double clumpingMultiplier = 10;
@@ -18,17 +28,9 @@ public class FitnessCore {
     public int preferredDayScoreMax = 1000;
     public int minTaskSize = 2;
     public int timeOfDayScoreMax = 1000;
-    public List<List<double>> timeOfDayPreferences = new List<List<double>> { // 1 is preferred 0 is neural and -2 is not preferred
-        new List<double> { 0, 0, 0, 0 }, //0
-        new List<double> { 0, 0, 0, 0 }, //1
-        new List<double> { 0, 0, 1, 0 }, //2
-        new List<double> { 0, 0, 0, 0 }, //3
-        new List<double> { 0, -2, 1, 0 }, //4
-        new List<double> { 0, 0, 0, 0 }, //5
-        new List<double> { 0, 0, 0, 0 }, //6
-    };
+    public List<List<int>> timeOfDayPreferences = new List<List<int>>();
 
-    public List<double> preferredDays = new List<double> { 0, 0, 0, 0, 0, 0, 0 };
+    public List<int> preferredDays = new List<int>();
 
     public double PopulationStdDev(IEnumerable<int> values)
     {
