@@ -22,6 +22,17 @@ public class DenseLayer : IBaseLayer {
         return input * weights + bias;
     }
 
+    public Matrix<double> BackwardProp(Matrix<double> outputGradient, double learningRate)
+    {
+        Matrix<double> weightedGradient = Input.Transpose() * outputGradient;
+        Matrix<double> oldWeights = weights.Clone();
+        weights -= weightedGradient * learningRate;
+
+        Matrix<double> biasGradient = outputGradient.ColumnSums().ToRowMatrix(); 
+        bias -= biasGradient * learningRate;
+        return outputGradient * oldWeights.Transpose();
+    }
+
     public IBaseLayer cloneLayer()
     {
         DenseLayer newLayer = new DenseLayer(weights.RowCount, weights.ColumnCount);

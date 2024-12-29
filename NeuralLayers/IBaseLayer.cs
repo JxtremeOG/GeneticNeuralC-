@@ -7,6 +7,7 @@ public interface IBaseLayer
     Matrix<double>? Output { get; set; }
 
     Matrix<double> ForwardProp(Matrix<double> input);
+    Matrix<double> BackwardProp(Matrix<double> outputGradient, double learningRate);
 
     IBaseLayer cloneLayer();
 }

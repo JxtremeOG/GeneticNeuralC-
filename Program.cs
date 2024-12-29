@@ -1,4 +1,5 @@
-﻿using Google.Protobuf;
+﻿using System.Diagnostics;
+using Google.Protobuf;
 using MathNet.Numerics.LinearAlgebra;
 
 class Program
@@ -54,6 +55,7 @@ class Program
         BinaryFileHandler fileHandler = new BinaryFileHandler();
         Console.WriteLine("1. Write Data or 2. Read Data");
         if (int.Parse(Console.ReadLine()) == 1) {
+            Stopwatch primaryStopWatch = Stopwatch.StartNew();
             Console.WriteLine("Enter data set size: ");
             Random random = new Random();
             int mutationChance = 60; //% chance out of 100
@@ -67,7 +69,9 @@ class Program
                 throw new Exception("Population size must be divisible by immigrant count percent");
             }
 
+            primaryStopWatch.Start();
             for (int i = 0; i < dataSetSize; i++) {
+                Console.WriteLine($"Beginning training of data example {i}...");
                 int taskSize = random.Next(1,13);
                 // Console.WriteLine("Enter task size: ");
                 // int taskSize = int.Parse(Console.ReadLine());
@@ -82,9 +86,31 @@ class Program
                 byte[] binaryBytes = geneticAlgorithm.BinaryStringToByteArray(binaryData);
                 fileHandler.SaveToBinaryFile(binaryBytes, "ScheduleData/calendarTrainData.bin");
             }
+            primaryStopWatch.Stop();
+            Console.WriteLine($"Training for {dataSetSize} data examples elapsed over {primaryStopWatch.Elapsed}");
         }
         else {
-            Console.WriteLine(fileHandler.FileToDataSet("ScheduleData/calendarTrainData.bin").Count);
+            List<NeuralScheduleHandler> scheduleDataSet = fileHandler.FileToDataSet("ScheduleData/calendarTrainData.bin");
+            Console.WriteLine($"{scheduleDataSet.Count} data examples read");
+            Console.WriteLine($"Train Model? Y or N");
+            if (Console.ReadLine() == "N") {
+                return;
+            }
+
+            NeuralNetwork network = new NeuralNetwork(
+                new List<IBaseLayer>{
+                    new DenseLayer(1391, 1363),
+                    new ActivationTanh(),
+                    new DenseLayer(1363, 1356),
+                    new ActivationSigmoid(),
+                    new DenseLayer(1356, 1344),
+                    new ActivationTanh(),
+                    new DenseLayer(1344, 1344),
+                    new ActivationSigmoid()
+                }
+            );
+
+            // network.Train(network.MeanSquaredError, network.MeanSquaredErrorPrime)
         }
     }
 

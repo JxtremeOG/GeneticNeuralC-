@@ -254,6 +254,9 @@ public class GeneticAlgorithmGenerate {
                 newPopulation.Add(scheduleMutator.MutateShiftMode(newPopulation[0], scheduleMutator.getTaskClumps(newPopulation[0])));
             }
 
+            if (i % 50 == 0)
+                Console.WriteLine($"Generation: {i} Overall best fitness: {overallBestSchedule.fitness}");
+
             if (previousBestFitness >= currentBestFitness) {
                 generationsWithoutImprovement++;
             }
