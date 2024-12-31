@@ -113,7 +113,38 @@ class Program
                 }
             );
 
-            network.Train(network.MeanSquaredError, network.MeanSquaredErrorPrime, inputDataSet, outputDataSet, 100, 0.1, true);
+            Console.WriteLine($"Enter number of epochs: ");
+            int epochs = int.Parse(Console.ReadLine());
+
+            Console.WriteLine("Training model...");
+            network.Train(network.MeanSquaredError, network.MeanSquaredErrorPrime, inputDataSet, outputDataSet, epochs, 0.1, true);
+
+            var dataTest = fileHandler.FileToDataSet("ScheduleData/calendarTestData.bin");
+            List<NeuralScheduleHandler> scheduleTestDataSet = data.Item1;
+            List<Matrix<double>> inputTestDataSet = data.Item2;
+            List<Matrix<double>> outputTestDataSet = data.Item3;
+
+            for (int i = 0; i < inputTestDataSet.Count; i++) {
+                Matrix<double> input = inputTestDataSet[i];
+                Matrix<double> output = network.predictOutcome(input);
+                var inputArray = input.ToArray();
+                var outputArray = output.ToArray();
+
+                Console.WriteLine($"Data Example {i} task size: {scheduleTestDataSet[i].taskSegments.Cast<bool>().Count(bit => bit)}");
+                Console.WriteLine($"| exp | out  | exp | out  | exp | out  | exp | out  | exp | out  | exp | out  | exp | out  | exp | out  |");
+
+                for (int j = 0; j < outputArray.Length; j+=8) {
+                    for (int k = j; k < j+8; k++) {
+                        Console.Write($"|  {inputArray[0,k]}  | {outputArray[0,k].ToString("0.00")} ");
+                    }
+                    Console.WriteLine("|");
+                    if (j%96 == 0 && j != 0) {
+                        Console.WriteLine(new string('-', 105));
+                    }
+                }
+                Console.WriteLine();
+                Console.ReadLine();
+            }
         }
     }
 
