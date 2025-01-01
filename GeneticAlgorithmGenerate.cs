@@ -43,7 +43,7 @@ public class ScheduleBitMap {
         fitness = other.fitness;
         
         // Deep copy of taskIndexes (ImmutableHashSet ensures thread safety)
-        taskIndexes = other.taskIndexes;
+        taskIndexes = new HashSet<int>(other.taskIndexes);
         
         // Deep copy of vacantSegments
         vacantSegments = new List<int>(other.vacantSegments);
