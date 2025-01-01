@@ -235,10 +235,12 @@ public class FitnessCore {
         int maxValue = 0;
         int clumpSize = 0;
 
-        double timeOfDayScorePerSegment = timeOfDayScoreMax / schedule.taskIndexes.Count;
+        int taskIndexsCount = schedule.taskIndexes.Count;
+
+        double timeOfDayScorePerSegment = taskIndexsCount != 0 ? timeOfDayScoreMax / taskIndexsCount : 0;
         double standardDev;
-        double earlyScorePerSegment = earlyTaskScoreMax / schedule.taskIndexes.Count;
-        double preferredDayScorePerSegment = preferredDayScoreMax / schedule.taskIndexes.Count;
+        double earlyScorePerSegment = taskIndexsCount != 0 ? earlyTaskScoreMax / taskIndexsCount : 0;
+        double preferredDayScorePerSegment = taskIndexsCount != 0 ? preferredDayScoreMax / taskIndexsCount : 0;
 
         foreach (int taskIndex in schedule.taskIndexes) {
             if (taskIndex < minValue) minValue = taskIndex;

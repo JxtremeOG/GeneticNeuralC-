@@ -14,24 +14,48 @@ public static class ThreadSafeRandom
     public static Random Instance => threadLocalRandom.Value;
 }
 public class ScheduleBitMap {
-    public static Random random = new Random();
+    private static readonly ThreadLocal<Random> threadLocalRandom = new ThreadLocal<Random>(() =>
+        new Random(ThreadSafeRandom.Instance.Next()));
     private BitArray schedule;
     public int scheduleSize;
     public double scheduleDeviation;
     private BitArray scheduleBase;
     public double fitness;
     public HashSet<int> taskIndexes = new HashSet<int>();
-    public ScheduleBitMap(BitArray schedulePassed) {
+    public List<int> vacantSegments;
+    public ScheduleBitMap(BitArray schedulePassed, List<int> vacantSegmentsPassed) {
         schedule = schedulePassed;
         scheduleBase = schedulePassed;
         scheduleSize = schedulePassed.Length;
+        vacantSegments = vacantSegmentsPassed;
         fitness = 0;
     }
-    public void addTask(int taskSize) {
+
+    public ScheduleBitMap(ScheduleBitMap other)
+    {
+        // Deep copy of BitArray
+        schedule = new BitArray(other.schedule);
+        scheduleBase = new BitArray(other.scheduleBase);
+        
+        // Copy primitive types
+        scheduleSize = other.scheduleSize;
+        scheduleDeviation = other.scheduleDeviation;
+        fitness = other.fitness;
+        
+        // Deep copy of taskIndexes (ImmutableHashSet ensures thread safety)
+        taskIndexes = other.taskIndexes;
+        
+        // Deep copy of vacantSegments
+        vacantSegments = new List<int>(other.vacantSegments);
+    }
+    public void addTask(int taskSize)
+    {
         int validFlips = 0;
-        while (validFlips < taskSize) {
-            int flipIndex = random.Next(0, schedule.Length);
-            if (schedule[flipIndex] == false) {
+        while (validFlips < taskSize)
+        {
+            int flipIndex = threadLocalRandom.Value.Next(0, schedule.Length);
+            if (!schedule[flipIndex])
+            {
                 schedule[flipIndex] = true;
                 taskIndexes.Add(flipIndex);
                 validFlips++;
@@ -71,14 +95,6 @@ public class ScheduleBitMap {
 }
 
 public class GeneticAlgorithmGenerate {
-    public Dictionary<int, string> intToBinaryMap = new Dictionary<int, string>
-        {
-            { -2, "000" },
-            { -1, "001" },
-            {  0, "010" },
-            {  1, "011" },
-            {  2, "100" }
-        };
     public int populationSize;
     public int taskSize;
     public static Random random = new Random();
@@ -90,10 +106,17 @@ public class GeneticAlgorithmGenerate {
     public int generationCount;
     public double previousBestFitness = 0;
     public int generationsWithoutImprovement = 0;
+    public double baseFitness = 0;
     public BitArray scheduleBase;
+
+    public ConcurrentDictionary<int, double> segmentScores = new ConcurrentDictionary<int, double>();
+
+    public List<int> vacantSegments = new List<int>();
     public FitnessCore fitnessCore = new FitnessCore();
     public List<ScheduleBitMap> population = new List<ScheduleBitMap>();
+    public ScheduleBitMap singleTaskManager;
     public Random geneticRandom = new Random();
+    private object[] locks;
     public GeneticAlgorithmGenerate(int scheduleSizePassed, int taskSizePassed, 
     int populationSizePassed, int mutationChancePassed, int generationSizePassed, 
     int immigrantCountPassed) {
@@ -104,82 +127,51 @@ public class GeneticAlgorithmGenerate {
         generationCount = generationSizePassed;
         immigrantCount = immigrantCountPassed;
         scheduleBase = GenerateOrganizedSchedule();
-    }
-    public string Convert2DArrayToBinary(List<List<int>> array)
-    {
-        StringBuilder sb = new StringBuilder();
 
-        foreach (var row in array)
-        {
-            foreach (var value in row)
-            {
-                if (intToBinaryMap.ContainsKey(value))
-                {
-                    sb.Append(intToBinaryMap[value]);
-                }
-                else
-                {
-                    throw new ArgumentException($"Value {value} is out of the allowed range (-2 to 2).");
-                }
+        for (int segmentIndex = 0; segmentIndex < scheduleSize; segmentIndex++) { //Creates a dictionary of all open segments in base
+            if (!scheduleBase[segmentIndex]) {
+                vacantSegments.Add(segmentIndex);
+                segmentScores.TryAdd(segmentIndex, 0);
             }
         }
 
-        return sb.ToString();
-    }
+        locks = new object[scheduleSizePassed];
+        for (int i = 0; i < locks.Length; i++)
+            locks[i] = new object();
 
-    public string Convert1DArrayToBinary(List<int> array)
+        fitnessCore.PreCalculateClumpScores(scheduleSize);
+        fitnessCore.PreCalculateTaskClumpScores(taskSize);
+        singleTaskManager = new ScheduleBitMap(new BitArray(scheduleBase), vacantSegments);
+        baseFitness = fitnessCore.FitnessFunction(singleTaskManager);
+    }
+    public void loneSegmentScores(List<int> vacantSegments) {
+        foreach (int segment in vacantSegments) {
+            singleTaskManager.mutateBit(segment);
+            singleTaskManager.taskIndexes.Add(segment);
+            fitnessCore.FitnessFunction(singleTaskManager);
+            segmentScores[segment] += singleTaskManager.fitness - baseFitness;
+            singleTaskManager.mutateBit(segment);
+            singleTaskManager.taskIndexes.Remove(segment);
+        }
+    }
+    public void MinMaxNormalizeSegmentScores()
     {
-        StringBuilder sb = new StringBuilder();
-
-        foreach (var value in array)
+        double minScore = segmentScores.Values.Min();
+        double maxScore = segmentScores.Values.Max();
+        
+        double range = maxScore - minScore;
+        if (range <= 0)
         {
-            if (intToBinaryMap.ContainsKey(value))
-            {
-                sb.Append(intToBinaryMap[value]);
-            }
-            else
-            {
-                throw new ArgumentException($"Value {value} is out of the allowed range (-2 to 2).");
-            }
+            throw new Exception("Range of segment scores is 0 or negative. Cannot normalize.");
         }
-
-        return sb.ToString();
-    }
-    public byte[] BinaryStringToByteArray(string binary)
-    {
-        // Calculate the number of bytes needed
-        int numBytes = (binary.Length + 7) / 8;
-
-        // Pad the binary string with '0's to make its length a multiple of 8
-        binary = binary.PadRight(numBytes * 8, '0');
-
-        byte[] bytes = new byte[numBytes];
-        for (int i = 0; i < numBytes; i++)
+        
+        // Rescale values to the [0, 1] range
+        foreach (int key in segmentScores.Keys.ToList())
         {
-            string byteString = binary.Substring(8 * i, 8);
-            bytes[i] = Convert.ToByte(byteString, 2);
+            segmentScores[key] = Math.Round((segmentScores[key] - minScore) / range, 2);
         }
-
-        return bytes;
     }
 
-    public string SaveDataInfo(ScheduleBitMap schedule) {
-        string scheduleBase = string.Concat(schedule.getBaseSchedule().Cast<bool>().Select(bit => bit ? "1" : "0"));
-        string scheduleResult = string.Concat(schedule.getSchedule().Cast<bool>().Select(bit => bit ? "1" : "0"));
-        string taskSegments = new string('1', taskSize).PadRight(12, '0');
-        string preferredTimes = Convert2DArrayToBinary(fitnessCore.timeOfDayPreferences);
-        string preferredDays = Convert1DArrayToBinary(fitnessCore.preferredDays);
-
-        return scheduleBase + taskSegments + preferredTimes + preferredDays + scheduleResult;
-    }
-    public BitArray GenerateRandomSchedule() {
-        BitArray schedule = new BitArray(scheduleSize);
-        for (int i = 0; i < scheduleSize; i++) {
-            schedule[i] = geneticRandom.Next(0, 2) == 1;
-        }
-        scheduleBase = schedule;
-        return schedule;
-    }
     public BitArray GenerateOrganizedSchedule() {
         BitArray schedule = new BitArray(scheduleSize);
         int index = 0;
@@ -211,22 +203,64 @@ public class GeneticAlgorithmGenerate {
     public void generateFreshPopulation() {
         population = new List<ScheduleBitMap>();
         for (int i = 0; i < populationSize; i++) {
-            ScheduleBitMap schedule = new ScheduleBitMap(new BitArray(scheduleBase));
+            ScheduleBitMap schedule = new ScheduleBitMap(new BitArray(scheduleBase), vacantSegments);
             schedule.addTask(taskSize);
             population.Add(schedule);
         }
     }
-    public ScheduleBitMap TrainGenetically() {
+
+    public Task UpdateSegmentScoresAsync(List<ScheduleBitMap> population)
+    {
+        return Task.Run(() =>
+        {
+            // Use Parallel.ForEach with thread-local dictionaries
+            Parallel.ForEach(population,
+                () => new Dictionary<int, double>(), // Initialize thread-local dictionary
+                (schedule, loopState, localDict) =>
+                {
+                    double newFitnessValue = schedule.fitness - baseFitness;
+                    foreach (int taskIndex in schedule.taskIndexes)
+                    {
+                        if (localDict.TryGetValue(taskIndex, out double existing))
+                        {
+                            if (newFitnessValue > existing)
+                            {
+                                localDict[taskIndex] = newFitnessValue;
+                            }
+                        }
+                        else
+                        {
+                            localDict[taskIndex] = newFitnessValue;
+                        }
+                    }
+                    return localDict;
+                },
+                localDict =>
+                {
+                    // Merge thread-local dictionaries into the global ConcurrentDictionary
+                    foreach (var kvp in localDict)
+                    {
+                        segmentScores.AddOrUpdate(
+                            kvp.Key,
+                            kvp.Value,
+                            (key, existingValue) => Math.Max(existingValue, kvp.Value)
+                        );
+                    }
+                }
+            );
+        });
+    }
+
+
+    public async Task<ScheduleBitMap> TrainGenetically() {
         geneticStopWatch.Start();
         ScheduleMutator scheduleMutator = new ScheduleMutator(mutationChance);
         int generationsWithoutImprovementLimit = 50;
         int generationsWithoutImprovement = 0;
         double previousBestFitness = 0;
-        Console.WriteLine($"Training with task size: {taskSize}");
+        Console.WriteLine($"Training with task size: {taskSize} and population size: {populationSize} and generation count: {generationCount}");
         generateFreshPopulation();
         overallBestSchedule = population[0];
-        fitnessCore.PreCalculateClumpScores(scheduleSize);
-        fitnessCore.PreCalculateTaskClumpScores(taskSize);
         for (int i = 0; i < generationCount; i++) {
             // Console.WriteLine($"Generation: {i} and population size: {population.Count}");
             ParallelOptions parallelOptions = new ParallelOptions{ MaxDegreeOfParallelism = 16  /* limit to 4 concurrent threads */ };
@@ -236,6 +270,10 @@ public class GeneticAlgorithmGenerate {
                 schedule.fitness = 0;
                 fitnessCore.FitnessFunction(schedule);
             });
+
+            List<ScheduleBitMap> populationSnapshot = population.Select(s => new ScheduleBitMap(s)).ToList();
+            Task updateTask = UpdateSegmentScoresAsync(populationSnapshot);
+
             // foreach (ScheduleBitMap schedule in population) {
             //     schedule.fitness = 0;
             //     fitnessCore.FitnessFunction(schedule);
@@ -276,14 +314,14 @@ public class GeneticAlgorithmGenerate {
                     .Skip(immigrantCount)
                     .Take(immigrantCount * 3)
                     .ToList());
-                for (int j = 0; j < immigrantCount; j++) {
-                    ScheduleBitMap addedSchedule = new ScheduleBitMap(new BitArray(scheduleBase));
+                for (int j = 0; j < immigrantCount-1; j++) {
+                    ScheduleBitMap addedSchedule = new ScheduleBitMap(new BitArray(scheduleBase), vacantSegments);
                     addedSchedule.addTask(taskSize);
                     newPopulation.Add(addedSchedule);
                 }
                 
                 int remaining = populationSize - newPopulation.Count;
-                int batchSize = 40; // Adjust based on performance tests
+                int batchSize = 50; // Adjust based on performance tests
 
                 var parentPairs = new List<Tuple<ScheduleBitMap, ScheduleBitMap>>();
                 for (int j = 0; j < remaining / 2; j++)
@@ -312,7 +350,7 @@ public class GeneticAlgorithmGenerate {
                     newPopulation.Add(child);
                 }
 
-                // Handle odd population sizes
+                // Handle odd population sizes (if batchSize is too big)
                 while (newPopulation.Count < populationSize)
                 {
                     ScheduleBitMap parent1 = population[ThreadSafeRandom.Instance.Next(0, population.Count)];
@@ -327,15 +365,21 @@ public class GeneticAlgorithmGenerate {
                     }
                 }
                 population = newPopulation;
+                await updateTask;
             }
         }
+        Console.WriteLine(geneticStopWatch.Elapsed);
+        loneSegmentScores(vacantSegments);
+        Console.WriteLine(geneticStopWatch.Elapsed);
+        MinMaxNormalizeSegmentScores();
+        Console.WriteLine(geneticStopWatch.Elapsed);
         geneticStopWatch.Stop();
         return overallBestSchedule;
     }
 
     public Tuple<ScheduleBitMap, ScheduleBitMap> CrossOver(ScheduleBitMap schedule1, ScheduleBitMap schedule2) {
-        ScheduleBitMap childSchedule1 = new ScheduleBitMap(new BitArray(scheduleBase));
-        ScheduleBitMap childSchedule2 = new ScheduleBitMap(new BitArray(scheduleBase));
+        ScheduleBitMap childSchedule1 = new ScheduleBitMap(new BitArray(scheduleBase), vacantSegments);
+        ScheduleBitMap childSchedule2 = new ScheduleBitMap(new BitArray(scheduleBase), vacantSegments);
         List<int> child1TaskIndex = new List<int>();
         List<int> child2TaskIndex = new List<int>();
         List<int> combinedParentTasks = new List<int>();

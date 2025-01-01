@@ -62,8 +62,9 @@ class Program
             int scheduleSize = 96*14; //96 segments in a day. 1344 in 2 weeks
             int dataSetSize = int.Parse(Console.ReadLine());
             int populationSize = 5000;
-            int generationLimit = 300;
+            int generationLimit = 200; //Adaptive generation limit (10 * taskSize + generationLimit)
             int immigrantCountPercent = 2;
+            int dynamicGenerationLimit;
 
             if (populationSize * immigrantCountPercent / 100 % 1 != 0) {
                 throw new Exception("Population size must be divisible by immigrant count percent");
@@ -75,22 +76,22 @@ class Program
                 int taskSize = random.Next(1,13);
                 // Console.WriteLine("Enter task size: ");
                 // int taskSize = int.Parse(Console.ReadLine());
+                double immigrantCount = populationSize * immigrantCountPercent / 100;
+                dynamicGenerationLimit = generationLimit + taskSize * 10 > 300 ? 300 : generationLimit + taskSize * 10; //max out generation limit at 300
                 GeneticAlgorithmGenerate geneticAlgorithm = new GeneticAlgorithmGenerate(
-                    scheduleSize, taskSize, populationSize, mutationChance, generationLimit, immigrantCountPercent/100 * populationSize);
-                ScheduleBitMap topPerformer = geneticAlgorithm.TrainGenetically();
-                printSchedule(topPerformer);
-                // Console.WriteLine(geneticAlgorithm.SaveDataInfo(topPerformer));
-                Console.WriteLine($"Top performer fitness: {topPerformer.fitness} \nTask size: {taskSize} \nDeviation: {topPerformer.scheduleDeviation} \nTime elapsed: {geneticAlgorithm.geneticStopWatch.Elapsed}");
-                string binaryData = geneticAlgorithm.SaveDataInfo(topPerformer);
-                int tsrt = binaryData.Count();
-                byte[] binaryBytes = geneticAlgorithm.BinaryStringToByteArray(binaryData);
-                fileHandler.SaveToBinaryFile(binaryBytes, "ScheduleData/calendarTrainData.bin");
+                    scheduleSize, taskSize, populationSize, mutationChance, dynamicGenerationLimit, (int)immigrantCount);
+                ScheduleBitMap topPerformer = geneticAlgorithm.TrainGenetically().Result;
+                // printSchedule(topPerformer);
+                Console.WriteLine($"Top performer fitness: {topPerformer.fitness} \nTask size: {taskSize} \nGeneration Limit: {dynamicGenerationLimit} \nTime elapsed: {geneticAlgorithm.geneticStopWatch.Elapsed}");
+                string binaryData = fileHandler.SaveDataInfo(topPerformer, geneticAlgorithm);
+                byte[] binaryBytes = fileHandler.BinaryStringToByteArray(binaryData);
+                fileHandler.SaveToBinaryFile(binaryBytes, "ScheduleData/calendarProbabilityTrainData.bin");
             }
             primaryStopWatch.Stop();
             Console.WriteLine($"Training for {dataSetSize} data examples elapsed over {primaryStopWatch.Elapsed}");
         }
         else {
-            var data = fileHandler.FileToDataSet("ScheduleData/calendarTrainData.bin");
+            var data = fileHandler.FileToDataSet("ScheduleData/calendarProbabilityTrainData.bin");
             List<NeuralScheduleHandler> scheduleDataSet = data.Item1;
             List<Matrix<double>> inputDataSet = data.Item2;
             List<Matrix<double>> outputDataSet = data.Item3;
@@ -119,10 +120,10 @@ class Program
             Console.WriteLine("Training model...");
             network.Train(network.MeanSquaredError, network.MeanSquaredErrorPrime, inputDataSet, outputDataSet, epochs, 0.1, true);
 
-            var dataTest = fileHandler.FileToDataSet("ScheduleData/calendarTestData.bin");
-            List<NeuralScheduleHandler> scheduleTestDataSet = data.Item1;
-            List<Matrix<double>> inputTestDataSet = data.Item2;
-            List<Matrix<double>> outputTestDataSet = data.Item3;
+            var dataTest = fileHandler.FileToDataSet("ScheduleData/calendarProbabilityTestData.bin");
+            List<NeuralScheduleHandler> scheduleTestDataSet = dataTest.Item1;
+            List<Matrix<double>> inputTestDataSet = dataTest.Item2;
+            List<Matrix<double>> outputTestDataSet = dataTest.Item3;
 
             for (int i = 0; i < inputTestDataSet.Count; i++) {
                 Matrix<double> input = inputTestDataSet[i];
@@ -131,15 +132,15 @@ class Program
                 var outputArray = output.ToArray();
 
                 Console.WriteLine($"Data Example {i} task size: {scheduleTestDataSet[i].taskSegments.Cast<bool>().Count(bit => bit)}");
-                Console.WriteLine($"| exp | out  | exp | out  | exp | out  | exp | out  | exp | out  | exp | out  | exp | out  | exp | out  |");
+                Console.WriteLine($"| exp  | out  | exp  | out  | exp  | out  | exp  | out  | exp  | out  | exp  | out  | exp  | out  | exp  | out  |");
 
                 for (int j = 0; j < outputArray.Length; j+=8) {
                     for (int k = j; k < j+8; k++) {
-                        Console.Write($"|  {inputArray[0,k]}  | {outputArray[0,k].ToString("0.00")} ");
+                        Console.Write($"| {outputTestDataSet[i][0,k].ToString("0.00")} | {outputArray[0,k].ToString("0.00")} ");
                     }
                     Console.WriteLine("|");
                     if (j%96 == 0 && j != 0) {
-                        Console.WriteLine(new string('-', 105));
+                        Console.WriteLine(new string('-', 113));
                     }
                 }
                 Console.WriteLine();
